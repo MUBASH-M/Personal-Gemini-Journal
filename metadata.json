@@ -1,0 +1,7 @@
+{
+  "name": "Personal Gemini Journal",
+  "description": "A security-first, authenticated AI journaling web application with per-user data isolation, server-side secret management, automated session summarization, and private mood & theme trend insights.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
