@@ -161,22 +161,98 @@ export async function signOutFirebase(): Promise<void> {
 }
 
 /**
- * Save user profile to /users/{userId}
+ * Save user profile to /users/{userId} and sync Firebase Auth
  */
 export async function saveUserProfileToFirestore(profile: UserProfile): Promise<void> {
   try {
     const userDocRef = doc(db, 'users', profile.uid);
-    await setDoc(userDocRef, {
+    const payload: Record<string, any> = {
       uid: profile.uid,
       email: profile.email,
       displayName: profile.displayName,
-      role: profile.role,
-      createdAt: profile.createdAt,
+      role: profile.role || 'Private Journaler',
+      createdAt: profile.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-    }, { merge: true });
+    };
+
+    if (profile.photoURL !== undefined) payload.photoURL = profile.photoURL || null;
+    if (profile.bio !== undefined) payload.bio = profile.bio || null;
+    if (profile.pronouns !== undefined) payload.pronouns = profile.pronouns || null;
+    if (profile.recoveryContact !== undefined) payload.recoveryContact = profile.recoveryContact || null;
+    if (profile.sobrietyDate !== undefined) payload.sobrietyDate = profile.sobrietyDate || null;
+    if (profile.intention !== undefined) payload.intention = profile.intention || null;
+    if (profile.authProvider !== undefined) payload.authProvider = profile.authProvider;
+    if (profile.activeEditionId !== undefined) payload.activeEditionId = profile.activeEditionId;
+
+    await setDoc(userDocRef, payload, { merge: true });
+
+    // Sync with client-side Firebase Auth profile if matching
+    if (auth.currentUser && auth.currentUser.uid === profile.uid) {
+      await updateProfile(auth.currentUser, {
+        displayName: profile.displayName,
+        photoURL: profile.photoURL || null,
+      }).catch((e) => console.warn('Firebase Auth updateProfile sync notice:', e));
+    }
   } catch (err) {
     console.warn('Firestore user profile save error (fallback to local):', err);
   }
+}
+
+/**
+ * Fetch profile directly from Firestore /users/{userId}
+ */
+export async function fetchFirestoreUserProfile(userId: string): Promise<UserProfile | null> {
+  try {
+    const userDocRef = doc(db, 'users', userId);
+    const snap = await getDoc(userDocRef);
+    if (snap.exists()) {
+      return snap.data() as UserProfile;
+    }
+  } catch (err) {
+    console.warn('Failed to fetch Firestore user profile:', err);
+  }
+  return null;
+}
+
+/**
+ * Attempt to obtain the photo URL associated with Gmail / Google or Apple ID login
+ */
+export function getProviderLoginPhotoURL(user?: UserProfile | null): string | null {
+  // 1. Direct Firebase Auth user photo
+  if (auth.currentUser?.photoURL) {
+    return auth.currentUser.photoURL;
+  }
+
+  // 2. Check providerData in Firebase Auth
+  if (auth.currentUser?.providerData) {
+    for (const provider of auth.currentUser.providerData) {
+      if (provider.photoURL) {
+        return provider.photoURL;
+      }
+    }
+  }
+
+  // 3. If user has an existing photoURL from their profile
+  if (user?.photoURL) {
+    return user.photoURL;
+  }
+
+  // 4. Construct provider-specific avatar for Gmail / Google Workspace
+  const email = user?.email || auth.currentUser?.email;
+  if (email && (email.toLowerCase().includes('@gmail.com') || email.toLowerCase().includes('@googlemail.com') || user?.authProvider === 'google')) {
+    return `https://unavatar.io/google/${encodeURIComponent(email)}`;
+  }
+
+  // 5. Apple ID / iCloud avatar service
+  if (email && (email.toLowerCase().includes('@icloud.com') || email.toLowerCase().includes('@apple.com') || user?.authProvider === 'apple')) {
+    return `https://unavatar.io/apple/${encodeURIComponent(email.split('@')[0])}`;
+  }
+
+  if (email) {
+    return `https://unavatar.io/${encodeURIComponent(email)}?fallback=false`;
+  }
+
+  return null;
 }
 
 /**

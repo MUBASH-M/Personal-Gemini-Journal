@@ -74,6 +74,37 @@ html.dark {
   color-scheme: dark;
 }
 
+/* Ensure all white and ivory text classes are bright, crisp, and high-contrast */
+html.dark .text-white {
+  color: #FFFFFF !important;
+}
+
+html.dark .text-white\/90 {
+  color: rgba(255, 255, 255, 0.94) !important;
+}
+
+html.dark .text-white\/80 {
+  color: rgba(255, 255, 255, 0.86) !important;
+}
+
+html.dark .text-white\/70 {
+  color: rgba(255, 255, 255, 0.78) !important;
+}
+
+html.dark .text-white\/60 {
+  color: rgba(255, 255, 255, 0.68) !important;
+}
+
+html.dark .text-white\/50 {
+  color: rgba(255, 255, 255, 0.58) !important;
+}
+
+html.dark .text-\[\#F9F8F6\],
+html.dark .text-\[\#FAF9F7\],
+html.dark .text-\[\#F7F5F0\] {
+  color: #FFFFFF !important;
+}
+
 /* Background surfaces in deep paper-ink */
 html.dark .bg-\[\#F9F8F6\],
 html.dark .bg-\[\#FAF9F7\],
@@ -86,12 +117,31 @@ html.dark .bg-white {
   background-color: #1D1D1B !important;
 }
 
+html.dark .bg-white\/80,
+html.dark .bg-white\/90,
+html.dark .bg-white\/70,
+html.dark .bg-white\/60,
+html.dark .bg-white\/50,
+html.dark .bg-white\/40,
+html.dark .bg-white\/30 {
+  background-color: #1A1A18 !important;
+  border-color: rgba(237, 233, 224, 0.15) !important;
+}
+
+html.dark .bg-\[\#FAF9F7\]\/90,
+html.dark .bg-\[\#FAF9F7\]\/80,
+html.dark .bg-\[\#F9F8F6\]\/60,
+html.dark .bg-\[\#FDFBF7\] {
+  background-color: #141413 !important;
+  border-color: rgba(237, 233, 224, 0.14) !important;
+}
+
 html.dark .bg-\[\#F2EFE9\],
 html.dark .bg-\[\#EFECE6\],
 html.dark .bg-\[\#EDEAE3\],
 html.dark .hover\:bg-\[\#F2EFE9\]:hover,
 html.dark .hover\:bg-\[\#EDEAE3\]:hover {
-  background-color: #262623 !important;
+  background-color: #242421 !important;
 }
 
 html.dark .bg-\[\#E5E3DF\]\/50,
@@ -99,37 +149,37 @@ html.dark .bg-\[\#E5E3DF\]\/60,
 html.dark .bg-\[\#E5E3DF\]\/70,
 html.dark .hover\:bg-\[\#E5E3DF\]\/60:hover,
 html.dark .hover\:bg-\[\#E5E3DF\]\/70:hover {
-  background-color: rgba(45, 45, 41, 0.75) !important;
+  background-color: rgba(45, 45, 41, 0.85) !important;
 }
 
-/* Deep parchment text tones */
+/* Deep parchment text tones with high WCAG AA contrast against dark backgrounds */
 html.dark .text-\[\#1A1A1A\] {
-  color: #EDE9DF !important;
+  color: #F5F3ED !important;
 }
 
 html.dark .text-\[\#1A1A1A\]\/80 {
-  color: #D6D2C8 !important;
+  color: #E2DDD2 !important;
 }
 
 html.dark .text-\[\#1A1A1A\]\/70 {
-  color: #BBB7AD !important;
+  color: #CEC8BC !important;
 }
 
 html.dark .text-\[\#1A1A1A\]\/60 {
-  color: #9E9A90 !important;
+  color: #BBB4A6 !important;
 }
 
 html.dark .text-\[\#1A1A1A\]\/50 {
-  color: #827E75 !important;
+  color: #A8A293 !important;
 }
 
 html.dark .text-\[\#1A1A1A\]\/40 {
-  color: #6C6860 !important;
+  color: #968F80 !important;
 }
 
 html.dark .text-\[\#1A1A1A\]\/30,
 html.dark .text-\[\#1A1A1A\]\/25 {
-  color: #55524B !important;
+  color: #847E70 !important;
 }
 
 /* Border rules */
@@ -142,36 +192,59 @@ html.dark .border-\[\#1A1A1A\]\/20,
 html.dark .border-\[\#1A1A1A\]\/15,
 html.dark .border-\[\#1A1A1A\]\/10,
 html.dark .border-\[\#1A1A1A\]\/5 {
-  border-color: rgba(237, 233, 224, 0.14) !important;
+  border-color: rgba(237, 233, 224, 0.16) !important;
 }
 
 /* Header blur styling in dark mode */
 html.dark header#app-header {
-  background-color: rgba(20, 20, 19, 0.94) !important;
+  background-color: rgba(20, 20, 19, 0.95) !important;
   border-color: rgba(237, 233, 224, 0.14) !important;
 }
 
-/* Primary buttons & active tabs in night ledger */
+/* Primary dark buttons & active tabs in night ledger:
+   Rendered with elevated dark charcoal background and bright, crisp white text */
 html.dark button.bg-\[\#1A1A1A\],
 html.dark a.bg-\[\#1A1A1A\],
 html.dark input[type="submit"].bg-\[\#1A1A1A\] {
-  background-color: #EDE9DF !important;
-  color: #141413 !important;
-  border-color: #EDE9DF !important;
+  background-color: #2B2B27 !important;
+  color: #FFFFFF !important;
+  border-color: rgba(237, 233, 224, 0.35) !important;
+}
+
+html.dark button.bg-\[\#1A1A1A\] *,
+html.dark a.bg-\[\#1A1A1A\] * {
+  color: #FFFFFF !important;
+}
+
+html.dark button.bg-\[\#1A1A1A\] svg,
+html.dark a.bg-\[\#1A1A1A\] svg {
+  color: #FFFFFF !important;
 }
 
 html.dark button.bg-\[\#1A1A1A\]:hover,
-html.dark button.hover\:bg-black:hover {
-  background-color: #FFFFFF !important;
-  color: #000000 !important;
-  border-color: #FFFFFF !important;
+html.dark button.hover\:bg-black:hover,
+html.dark a.bg-\[\#1A1A1A\]:hover {
+  background-color: #3B3B35 !important;
+  color: #FFFFFF !important;
+  border-color: rgba(237, 233, 224, 0.6) !important;
 }
 
 /* Seal / Avatar blocks */
 html.dark div.bg-\[\#1A1A1A\] {
   background-color: #292926 !important;
-  color: #EDE9DF !important;
-  border-color: rgba(237, 233, 224, 0.3) !important;
+  color: #FFFFFF !important;
+  border-color: rgba(237, 233, 224, 0.35) !important;
+}
+
+html.dark div.bg-\[\#1A1A1A\] * {
+  color: #FFFFFF !important;
+}
+
+/* Keyboard keys */
+html.dark kbd {
+  background-color: #242421 !important;
+  color: #FFFFFF !important;
+  border-color: rgba(237, 233, 224, 0.25) !important;
 }
 
 /* Form controls */
@@ -179,13 +252,13 @@ html.dark input,
 html.dark textarea,
 html.dark select {
   background-color: #191917 !important;
-  color: #EDE9DF !important;
-  border-color: rgba(237, 233, 224, 0.18) !important;
+  color: #FFFFFF !important;
+  border-color: rgba(237, 233, 224, 0.22) !important;
 }
 
 html.dark input::placeholder,
 html.dark textarea::placeholder {
-  color: #726E66 !important;
+  color: #8C867B !important;
 }
 
 html.dark input:focus,
@@ -199,8 +272,79 @@ html.dark .text-\[\#8C271E\] {
   color: #E26A5E !important;
 }
 
-html.dark .border-t-\[\#8C271E\] {
-  border-top-color: #E26A5E !important;
+html.dark .border-t-\[\#8C271E\],
+html.dark .border-\[\#8C271E\] {
+  border-color: #E26A5E !important;
+}
+
+/* Tone & Mood badges in night ledger */
+html.dark .bg-\[\#F0F4F1\],
+html.dark .bg-\[\#F5F8F6\],
+html.dark .bg-\[\#EBF1E8\] {
+  background-color: #162419 !important;
+  color: #79C289 !important;
+  border-color: rgba(121, 194, 137, 0.3) !important;
+}
+
+html.dark .bg-\[\#FAF0E6\],
+html.dark .bg-\[\#FCF6EE\] {
+  background-color: #2E1B0E !important;
+  color: #E8A87C !important;
+  border-color: rgba(232, 168, 124, 0.3) !important;
+}
+
+html.dark .bg-\[\#F4EFF7\],
+html.dark .bg-\[\#FAF6FC\] {
+  background-color: #24152E !important;
+  color: #CBA8E0 !important;
+  border-color: rgba(203, 168, 224, 0.3) !important;
+}
+
+html.dark .bg-\[\#EDF5F2\],
+html.dark .bg-\[\#F4F9F6\] {
+  background-color: #10261E !important;
+  color: #6DC2A5 !important;
+  border-color: rgba(109, 194, 165, 0.3) !important;
+}
+
+html.dark .bg-\[\#F9ECEB\],
+html.dark .bg-\[\#FCF4F3\] {
+  background-color: #2B1413 !important;
+  color: #E68884 !important;
+  border-color: rgba(230, 136, 132, 0.3) !important;
+}
+
+html.dark .bg-\[\#F7EFE8\],
+html.dark .bg-\[\#FAF4EE\] {
+  background-color: #2B1C10 !important;
+  color: #E4A674 !important;
+  border-color: rgba(228, 166, 116, 0.3) !important;
+}
+
+html.dark .bg-\[\#F8EDED\],
+html.dark .bg-\[\#FAF3F3\] {
+  background-color: #301313 !important;
+  color: #E88282 !important;
+  border-color: rgba(232, 130, 130, 0.3) !important;
+}
+
+html.dark .bg-\[\#F0EEF5\],
+html.dark .bg-\[\#F6F4FA\] {
+  background-color: #1C182B !important;
+  color: #AFA2D6 !important;
+  border-color: rgba(175, 162, 214, 0.3) !important;
+}
+
+html.dark .bg-rose-50 {
+  background-color: #2A1315 !important;
+  color: #FCA5A5 !important;
+  border-color: rgba(248, 113, 113, 0.3) !important;
+}
+
+html.dark .text-rose-800,
+html.dark .text-rose-950,
+html.dark .text-rose-700 {
+  color: #FCA5A5 !important;
 }
 
 /* Dropdowns & Popovers */
@@ -215,5 +359,6 @@ html.dark .popover-surface {
 html.dark .font-mono.bg-\[\#1A1A1A\] {
   background-color: #0E0E0D !important;
   border-color: rgba(237, 233, 224, 0.2) !important;
+  color: #FFFFFF !important;
 }
 

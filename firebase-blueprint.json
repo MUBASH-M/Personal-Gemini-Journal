@@ -9,7 +9,14 @@
         "email": { "type": "string", "description": "User email address" },
         "displayName": { "type": "string", "description": "User display name" },
         "role": { "type": "string", "description": "User role or designation" },
-        "createdAt": { "type": "string", "description": "ISO timestamp of account creation" }
+        "photoURL": { "type": "string", "description": "User profile picture URL or data URI", "optional": true },
+        "bio": { "type": "string", "description": "Personal reflection biography or intention statement", "optional": true },
+        "pronouns": { "type": "string", "description": "Preferred pronouns", "optional": true },
+        "recoveryContact": { "type": "string", "description": "Trusted crisis or accountability contact", "optional": true },
+        "sobrietyDate": { "type": "string", "description": "Milestone or recovery anniversary date", "optional": true },
+        "authProvider": { "type": "string", "description": "Authentication provider method", "optional": true },
+        "createdAt": { "type": "string", "description": "ISO timestamp of account creation" },
+        "updatedAt": { "type": "string", "description": "ISO timestamp of last profile update", "optional": true }
       }
     },
     "JournalEntry": {

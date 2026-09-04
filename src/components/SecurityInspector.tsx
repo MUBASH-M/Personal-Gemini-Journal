@@ -9,6 +9,7 @@ import {
 } from '../api';
 import { testLiveFirestoreSecurity, firebaseConfig } from '../firebase';
 import { HashChainLedgerModal } from './HashChainLedgerModal';
+import { AiSecuritySuite } from './AiSecuritySuite';
 import {
   ShieldCheck,
   ShieldAlert,
@@ -41,6 +42,7 @@ export const SecurityInspector: React.FC<SecurityInspectorProps> = ({
   const [testResult, setTestResult] = useState<any | null>(null);
   const [testingType, setTestingType] = useState<string | null>(null);
   const [showLedgerModal, setShowLedgerModal] = useState(false);
+  const [securitySection, setSecuritySection] = useState<'ai-suite' | 'database-isolation'>('ai-suite');
 
   // Quick chain verification summary state
   const [chainSummary, setChainSummary] = useState<{
@@ -195,7 +197,38 @@ export const SecurityInspector: React.FC<SecurityInspectorProps> = ({
         </div>
       </div>
 
-      {/* Feature 1 Summary Card: Cryptographic Chain Status */}
+      {/* Primary Security Architecture Switcher */}
+      <div className="flex items-center gap-2 p-1.5 bg-[#FAF9F7] border border-[#1A1A1A]/15">
+        <button
+          onClick={() => setSecuritySection('ai-suite')}
+          className={`flex-1 py-2.5 px-4 text-xs font-mono uppercase tracking-wider font-bold transition-all border flex items-center justify-center gap-2 ${
+            securitySection === 'ai-suite'
+              ? 'bg-[#1A1A1A] text-white border-[#1A1A1A] shadow-xs'
+              : 'bg-white text-[#1A1A1A]/70 border-[#1A1A1A]/15 hover:border-[#1A1A1A]/40 hover:text-[#1A1A1A]'
+          }`}
+        >
+          <ShieldCheck className="w-4 h-4 text-[#8C271E]" />
+          <span>AI Security, Crisis Guard &amp; Governance (7 Modules)</span>
+        </button>
+
+        <button
+          onClick={() => setSecuritySection('database-isolation')}
+          className={`flex-1 py-2.5 px-4 text-xs font-mono uppercase tracking-wider font-bold transition-all border flex items-center justify-center gap-2 ${
+            securitySection === 'database-isolation'
+              ? 'bg-[#1A1A1A] text-white border-[#1A1A1A] shadow-xs'
+              : 'bg-white text-[#1A1A1A]/70 border-[#1A1A1A]/15 hover:border-[#1A1A1A]/40 hover:text-[#1A1A1A]'
+          }`}
+        >
+          <Database className="w-4 h-4 text-[#3B5A30]" />
+          <span>Cloud Isolation, Secret Manager &amp; SHA-256 Ledger</span>
+        </button>
+      </div>
+
+      {securitySection === 'ai-suite' ? (
+        <AiSecuritySuite currentUser={currentUser} />
+      ) : (
+        <>
+          {/* Feature 1 Summary Card: Cryptographic Chain Status */}
       {chainSummary && (
         <div
           className={`p-4 border flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
@@ -634,6 +667,8 @@ export const SecurityInspector: React.FC<SecurityInspectorProps> = ({
           )}
         </div>
       </div>
+        </>
+      )}
 
       {/* Ledger Modal */}
       {showLedgerModal && (

@@ -51,6 +51,14 @@ export interface UserProfile {
   displayName: string;
   role: string;
   createdAt: string;
+  photoURL?: string;
+  bio?: string;
+  pronouns?: string;
+  recoveryContact?: string;
+  sobrietyDate?: string;
+  intention?: string;
+  authProvider?: string;
+  updatedAt?: string;
 }
 
 export interface SecurityAuditLog {
@@ -424,6 +432,27 @@ export function registerUser(email: string, displayName: string): UserProfile {
 
 export function getAllUsers(): UserProfile[] {
   return Array.from(usersDatabase.values());
+}
+
+export function updateUserProfile(uid: string, updates: Partial<UserProfile>): UserProfile | undefined {
+  const existing = usersDatabase.get(uid);
+  if (!existing) return undefined;
+  const updated: UserProfile = {
+    ...existing,
+    ...updates,
+    uid: existing.uid, // preserve original UID
+    updatedAt: new Date().toISOString(),
+  };
+  usersDatabase.set(uid, updated);
+  logAudit(
+    uid,
+    `/users/${uid}`,
+    'WRITE',
+    'ALLOW',
+    'match /users/{uid} { allow update: if request.auth.uid == uid }',
+    `Updated profile metadata for user ${uid}`
+  );
+  return updated;
 }
 
 export function getUserEntries(callerUid: string, targetUid?: string): {

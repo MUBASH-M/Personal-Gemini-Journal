@@ -7,6 +7,13 @@ export interface UserProfile {
   authProvider?: 'google' | 'apple' | 'email' | 'persona' | 'anonymous';
   photoURL?: string;
   activeEditionId?: string;
+  bio?: string;
+  pronouns?: string;
+  recoveryContact?: string;
+  sobrietyDate?: string;
+  intention?: string;
+  updatedAt?: string;
+  personaTagline?: string;
 }
 
 export interface JournalEdition {
@@ -26,6 +33,8 @@ export interface JournalEdition {
 export interface ChatMessage {
   role: 'user' | 'model';
   text: string;
+  timestamp?: string;
+  safety?: MessageSafetyMetadata;
 }
 
 export interface JournalEntryReceipt {
@@ -180,3 +189,156 @@ export interface SecurityPosture {
   };
   auditLogs: SecurityAuditLog[];
 }
+
+// ----------------------------------------------------
+// Health & Crisis AI Security Specifications
+// ----------------------------------------------------
+
+export type UserRole = 'patient' | 'care_provider' | 'admin';
+
+export interface CrisisDetectionResult {
+  hasCrisisSignals: boolean;
+  crisisCategory?: 'self_harm' | 'suicide_risk' | 'acute_hopelessness' | 'violence' | 'substance_overdose' | 'none';
+  riskScore: number;
+  severityTier: 'LOW' | 'MODERATE' | 'ELEVATED' | 'HIGH_CRISIS';
+  flaggedKeywords: string[];
+  escalationRequired: boolean;
+  emergencyResources?: {
+    primaryHelpline: string;
+    textLine: string;
+    specializedResource: string;
+    instructions: string;
+  };
+}
+
+export interface ToxicityDetectionResult {
+  isToxic: boolean;
+  toxicityScore: number;
+  categories: string[];
+}
+
+export interface PhiRedactionResult {
+  sanitizedText: string;
+  originalText: string;
+  redactionCount: number;
+  redactedTypes: string[];
+  wasRedacted: boolean;
+  redactionTokens: Array<{
+    type: string;
+    token: string;
+    index: number;
+  }>;
+}
+
+export interface PromptInjectionResult {
+  isInjection: boolean;
+  confidenceScore: number;
+  flaggedPattern?: string;
+  mitigationAction: 'PASS' | 'STRIP' | 'BLOCK';
+}
+
+export interface AiSafetyAuditLog {
+  id: string;
+  timestamp: string;
+  callerUid: string;
+  userRole: UserRole;
+  endpoint: string;
+  promptLength: number;
+  responseLength: number;
+  phiRedactionsCount: number;
+  phiTypesRedacted: string[];
+  riskTier: 'LOW' | 'MODERATE' | 'ELEVATED' | 'HIGH_CRISIS';
+  crisisCategory?: string;
+  isPromptInjection: boolean;
+  escalationTriggered: boolean;
+  modelId: string;
+  promptVersion: string;
+  latencyMs: number;
+  humanReviewStatus: 'NOT_APPLICABLE' | 'PENDING' | 'REVIEWED' | 'RESOLVED' | 'FALSE_POSITIVE';
+  humanReviewId?: string;
+}
+
+export interface HumanReviewItem {
+  id: string;
+  createdAt: string;
+  callerUid: string;
+  userDisplayName: string;
+  severity: 'ELEVATED' | 'HIGH_CRISIS';
+  triggerReason: string;
+  flaggedSnippet: string;
+  status: 'PENDING' | 'UNDER_REVIEW' | 'RESOLVED' | 'ESCALATED_TO_CLINICIAN';
+  assignedCareProvider?: string;
+  clinicalNotes?: string;
+  resolvedAt?: string;
+}
+
+export interface AnomalyAlert {
+  id: string;
+  timestamp: string;
+  callerUid: string;
+  type: 'RAPID_FIRE_QUERYING' | 'CONSECUTIVE_CRISIS_FLAGS' | 'PROMPT_INJECTION_REPEATED' | 'OFF_HOURS_HIGH_STRESS_BURST';
+  description: string;
+  severity: 'WARNING' | 'CRITICAL';
+}
+
+export interface ModelPromptVersion {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  safetyTier: string;
+  isActive: boolean;
+  releasedAt: string;
+  systemInstructionAddendum: string;
+}
+
+export interface UserConsentPreferences {
+  aiReflectiveCompanion: boolean;
+  crisisInterventionEscalation: boolean;
+  anonymizedResearchTelemetry: boolean;
+  consentGrantedAt: string;
+}
+
+export interface DataPurgeReceipt {
+  purgeId: string;
+  uid: string;
+  recordsPurged: number;
+  cryptographicReceipt: string;
+  purgedAt: string;
+  complianceStandard: string;
+}
+
+export interface AiSecurityDashboardData {
+  metrics: {
+    totalInteractionsAudited: number;
+    highCrisisInteractions: number;
+    promptInjectionsBlocked: number;
+    totalPhiTokensRedacted: number;
+    pendingHumanReviewsCount: number;
+    activeModelVersion: ModelPromptVersion;
+    compliancePosture: {
+      hipaaCompliant: boolean;
+      encryptionAtRest: string;
+      encryptionInTransit: string;
+      dataMinimizationActive: boolean;
+      auditLogRetentionPolicy: string;
+    };
+  };
+  activeModelVersion: ModelPromptVersion;
+  availableModelVersions: ModelPromptVersion[];
+  recentAuditLogs: AiSafetyAuditLog[];
+  humanReviewQueue: HumanReviewItem[];
+  anomalyAlerts: AnomalyAlert[];
+  userConsent: UserConsentPreferences;
+}
+
+export interface MessageSafetyMetadata {
+  crisisSignals?: CrisisDetectionResult;
+  phiRedaction?: PhiRedactionResult;
+  promptInjectionBlocked?: boolean;
+  outputValidationFlags?: string[];
+  auditLogId?: string;
+  latencyMs?: number;
+  rateLimitRemaining?: number;
+}
+

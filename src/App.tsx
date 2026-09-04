@@ -23,6 +23,7 @@ import {
   createEntryInFirestore,
   deleteEntryFromFirestore,
   saveUserProfileToFirestore,
+  fetchFirestoreUserProfile,
   signInWithGooglePopup,
   signInWithApplePopup,
   signInWithEmail,
@@ -46,11 +47,12 @@ import { SecurityInspector } from './components/SecurityInspector';
 import { LegalComplianceModal } from './components/LegalComplianceModal';
 import { SummaryConfirmModal } from './components/SummaryConfirmModal';
 import { EditionSelectorModal } from './components/EditionSelectorModal';
+import { ProfileView } from './components/ProfileView';
 
 export default function App() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [personas, setPersonas] = useState<UserProfile[]>([]);
-  const [currentTab, setCurrentTab] = useState<'session' | 'history' | 'lineage' | 'insights' | 'security' | 'legal'>('session');
+  const [currentTab, setCurrentTab] = useState<'session' | 'history' | 'lineage' | 'insights' | 'security' | 'legal' | 'profile'>('session');
   
   // Editorial Editions state
   const [editions, setEditions] = useState<JournalEdition[]>(() => getStoredEditions());
@@ -99,6 +101,12 @@ export default function App() {
         const storedToken = getStoredToken();
         if (storedUser && storedToken) {
           setUser(storedUser);
+          // Check if Firestore has more complete profile details (e.g. custom photo, bio)
+          fetchFirestoreUserProfile(storedUser.uid).then((fsUser) => {
+            if (fsUser) {
+              setUser((prev) => (prev ? { ...prev, ...fsUser } : fsUser));
+            }
+          }).catch(() => {});
           // Returning users land on history (from UX doc 2.2)
           setCurrentTab('history');
         } else if (personaList.length > 0) {
@@ -195,14 +203,19 @@ export default function App() {
     try {
       let email = 'reader.google@gmail.com';
       let displayName = 'Google Scholar';
+      let photoURL: string | undefined;
       try {
         const cred = await signInWithGooglePopup();
         if (cred?.user?.email) email = cred.user.email;
         if (cred?.user?.displayName) displayName = cred.user.displayName;
+        if (cred?.user?.photoURL) photoURL = cred.user.photoURL;
       } catch (fbErr: any) {
         console.warn('Direct Google popup fell back to standard Google credential token:', fbErr);
       }
-      const res = await login(undefined, email, displayName, 'google');
+      if (!photoURL && email.includes('@')) {
+        photoURL = `https://unavatar.io/google/${encodeURIComponent(email)}`;
+      }
+      const res = await login(undefined, email, displayName, 'google', photoURL);
       setUser(res.user);
       setMessages([]);
       setCurrentTab('history');
@@ -219,14 +232,19 @@ export default function App() {
     try {
       let email = 'curator.apple@icloud.com';
       let displayName = 'Apple Editorialist';
+      let photoURL: string | undefined;
       try {
         const cred = await signInWithApplePopup();
         if (cred?.user?.email) email = cred.user.email;
         if (cred?.user?.displayName) displayName = cred.user.displayName;
+        if (cred?.user?.photoURL) photoURL = cred.user.photoURL;
       } catch (fbErr: any) {
         console.warn('Direct Apple popup fell back to standard Apple credential token:', fbErr);
       }
-      const res = await login(undefined, email, displayName, 'apple');
+      if (!photoURL && email.includes('@')) {
+        photoURL = `https://unavatar.io/apple/${encodeURIComponent(email.split('@')[0])}`;
+      }
+      const res = await login(undefined, email, displayName, 'apple', photoURL);
       setUser(res.user);
       setMessages([]);
       setCurrentTab('history');
@@ -241,14 +259,19 @@ export default function App() {
     setAuthLoading(true);
     setAuthError(null);
     try {
+      let photoURL: string | undefined;
       if (password) {
         try {
-          await signInWithEmail(email, password);
+          const userCred = await signInWithEmail(email, password);
+          if (userCred?.user?.photoURL) photoURL = userCred.user.photoURL;
         } catch (fbErr) {
           console.warn('Firebase email auth fallback to backend auth:', fbErr);
         }
       }
-      const res = await login(undefined, email, email.split('@')[0], 'email');
+      if (!photoURL && email.toLowerCase().includes('@gmail.com')) {
+        photoURL = `https://unavatar.io/google/${encodeURIComponent(email)}`;
+      }
+      const res = await login(undefined, email, email.split('@')[0], 'email', photoURL);
       setUser(res.user);
       setMessages([]);
       setCurrentTab('history');
@@ -263,14 +286,19 @@ export default function App() {
     setAuthLoading(true);
     setAuthError(null);
     try {
+      let photoURL: string | undefined;
       if (password) {
         try {
-          await signUpWithEmail(email, password, displayName);
+          const userCred = await signUpWithEmail(email, password, displayName);
+          if (userCred?.user?.photoURL) photoURL = userCred.user.photoURL;
         } catch (fbErr) {
           console.warn('Firebase email signup fallback to backend registration:', fbErr);
         }
       }
-      const res = await register(email, displayName);
+      if (!photoURL && email.toLowerCase().includes('@gmail.com')) {
+        photoURL = `https://unavatar.io/google/${encodeURIComponent(email)}`;
+      }
+      const res = await register(email, displayName, photoURL);
       setUser(res.user);
       setMessages([]);
       setCurrentTab('session');
@@ -328,13 +356,24 @@ export default function App() {
 
   // Chat message sending
   const handleSendMessage = async (text: string) => {
-    const updatedHistory: ChatMessage[] = [...messages, { role: 'user', text }];
+    const userMsg: ChatMessage = {
+      role: 'user',
+      text,
+      timestamp: new Date().toISOString(),
+    };
+    const updatedHistory: ChatMessage[] = [...messages, userMsg];
     setMessages(updatedHistory);
     setIsGenerating(true);
 
     try {
       const res = await sendChatMessage(text, messages);
-      setMessages([...updatedHistory, { role: 'model', text: res.reply }]);
+      const modelMsg: ChatMessage = {
+        role: 'model',
+        text: res.reply,
+        timestamp: new Date().toISOString(),
+        safety: res.safety,
+      };
+      setMessages([...updatedHistory, modelMsg]);
     } catch (err) {
       console.error('Failed to send message:', err);
       setMessages([
@@ -342,6 +381,7 @@ export default function App() {
         {
           role: 'model',
           text: "I'm having a brief connection delay. Please know I'm listening—feel free to continue or retry in a moment.",
+          timestamp: new Date().toISOString(),
         },
       ]);
     } finally {
@@ -528,6 +568,19 @@ export default function App() {
           <LegalComplianceModal
             onDeleteAccount={handleDeleteAccount}
             userEmail={user.email}
+          />
+        )}
+
+        {currentTab === 'profile' && (
+          <ProfileView
+            currentUser={user}
+            onUpdateUser={(updated) => {
+              setUser(updated);
+            }}
+            editions={editions}
+            activeEditionId={activeEditionId}
+            onSelectEdition={handleSelectEdition}
+            onNavigateToTab={(tab) => setCurrentTab(tab)}
           />
         )}
       </main>

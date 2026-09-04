@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ChatMessage, UserProfile } from '../types';
 import { EmotionalWeatherCard } from './EmotionalWeatherCard';
 import { MemoryConsentLedgerModal } from './MemoryConsentLedgerModal';
+import { AiSecuritySuite } from './AiSecuritySuite';
 import {
   Send,
   Sparkles,
@@ -15,6 +16,11 @@ import {
   Brain,
   Eye,
   Lock,
+  LifeBuoy,
+  PhoneCall,
+  EyeOff,
+  AlertTriangle,
+  X,
 } from 'lucide-react';
 
 interface ChatSessionProps {
@@ -55,6 +61,7 @@ export const ChatSession: React.FC<ChatSessionProps> = ({
 }) => {
   const [inputText, setInputText] = useState('');
   const [showMemoryModal, setShowMemoryModal] = useState(false);
+  const [showAiSecurityModal, setShowAiSecurityModal] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -124,6 +131,17 @@ export const ChatSession: React.FC<ChatSessionProps> = ({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          {/* AI Security Guard Suite Trigger */}
+          <button
+            onClick={() => setShowAiSecurityModal(true)}
+            className="flex items-center gap-1.5 text-[#1A1A1A] hover:text-black text-[10px] uppercase tracking-wider bg-white hover:bg-[#FAF9F7] px-2.5 py-1 border border-[#8C271E]/30 font-mono transition-colors shadow-2xs"
+            title="Open AI Security, Crisis Guard & PHI Redaction Suite"
+          >
+            <ShieldCheck className="w-3 h-3 text-[#8C271E] shrink-0" />
+            <span className="hidden sm:inline">AI Security Guard</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-[#3B5A30] animate-pulse"></span>
+          </button>
+
           {/* Memory Consent Ledger Trigger */}
           <button
             onClick={() => setShowMemoryModal(true)}
@@ -239,11 +257,67 @@ export const ChatSession: React.FC<ChatSessionProps> = ({
                   >
                     {msg.text}
                   </div>
+
+                  {/* Safety Signals & Badges */}
+                  {msg.safety?.crisisSignals?.escalationRequired && (
+                    <div className="mt-3 p-3 bg-white border border-[#8C271E] shadow-2xs space-y-2 text-left">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-[#8C271E] font-mono uppercase">
+                        <LifeBuoy className="w-4 h-4 shrink-0" />
+                        <span>Immediate Crisis Support Available (Free &amp; Confidential 24/7)</span>
+                      </div>
+                      <p className="text-xs font-serif italic text-[#1A1A1A]/80">
+                        You don't have to carry this alone. Compassionate human help is available right now:
+                      </p>
+                      <div className="flex flex-wrap gap-2 text-xs font-mono">
+                        <a
+                          href="tel:988"
+                          className="px-2.5 py-1 bg-[#8C271E] text-white font-bold inline-flex items-center gap-1 hover:bg-black transition-colors"
+                        >
+                          <PhoneCall className="w-3 h-3" />
+                          <span>Call or Text 988 (Lifeline)</span>
+                        </a>
+                        <a
+                          href="sms:741741?body=HOME"
+                          className="px-2.5 py-1 bg-white border border-[#1A1A1A]/30 text-[#1A1A1A] font-bold inline-flex items-center gap-1 hover:border-[#1A1A1A] transition-colors"
+                        >
+                          <span>Text HOME to 741741</span>
+                        </a>
+                      </div>
+                      <div className="text-[10px] text-[#8C271E] font-mono">
+                        Clinical Triage: Conversation automatically queued for human clinician review.
+                      </div>
+                    </div>
+                  )}
+
+                  {msg.safety?.phiRedaction?.wasRedacted && (
+                    <div className="mt-2 text-[10px] font-mono text-[#8C271E] flex items-center gap-1.5 bg-[#8C271E]/5 p-1.5 border border-[#8C271E]/20 text-left">
+                      <EyeOff className="w-3 h-3 shrink-0" />
+                      <span>
+                        PHI Redacted: {msg.safety.phiRedaction.redactionCount} clinical identifier(s) sanitized before model ingestion.
+                      </span>
+                    </div>
+                  )}
+
+                  {msg.safety?.promptInjectionBlocked && (
+                    <div className="mt-2 text-[10px] font-mono text-[#3B5A30] flex items-center gap-1.5 bg-[#3B5A30]/5 p-1.5 border border-[#3B5A30]/20 text-left">
+                      <Lock className="w-3 h-3 shrink-0" />
+                      <span>System Prompt Security Guard neutralized prompt injection payload.</span>
+                    </div>
+                  )}
                 </div>
                 {isUser && (
-                  <div className="w-8 h-8 border border-[#1A1A1A] bg-[#FAF9F7] text-[#1A1A1A] flex items-center justify-center shrink-0 font-serif text-xs font-bold mt-0.5 select-none">
-                    {user.displayName.charAt(0)}
-                  </div>
+                  user.photoURL ? (
+                    <img
+                      src={user.photoURL}
+                      alt={user.displayName}
+                      referrerPolicy="no-referrer"
+                      className="w-8 h-8 border border-[#1A1A1A] object-cover shrink-0 mt-0.5 select-none"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 border border-[#1A1A1A] bg-[#FAF9F7] text-[#1A1A1A] flex items-center justify-center shrink-0 font-serif text-xs font-bold mt-0.5 select-none">
+                      {user.displayName.charAt(0)}
+                    </div>
+                  )
                 )}
               </div>
             );
@@ -335,6 +409,30 @@ export const ChatSession: React.FC<ChatSessionProps> = ({
       {/* Memory Consent Modal */}
       {showMemoryModal && (
         <MemoryConsentLedgerModal onClose={() => setShowMemoryModal(false)} />
+      )}
+
+      {/* AI Security, Clinical Safety & Governance Center Modal */}
+      {showAiSecurityModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-[#1A1A1A]/80 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-[#FAF9F7] border border-[#1A1A1A]/30 max-w-5xl w-full p-4 sm:p-6 max-h-[92vh] overflow-y-auto relative shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[#1A1A1A]/15">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-[#8C271E]" />
+                <h3 className="font-serif font-bold text-base sm:text-lg text-[#1A1A1A]">
+                  Recovery &amp; Prevention AI Security Suite
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowAiSecurityModal(false)}
+                className="p-1 text-[#1A1A1A]/60 hover:text-black hover:bg-white border border-transparent hover:border-[#1A1A1A]/20 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <AiSecuritySuite currentUser={user} />
+          </div>
+        </div>
       )}
     </div>
   );

@@ -15,12 +15,13 @@ import {
   Moon,
   GitBranch,
   Layers,
+  User,
 } from 'lucide-react';
 
 interface HeaderProps {
   user: UserProfile;
-  currentTab: 'session' | 'history' | 'lineage' | 'insights' | 'security' | 'legal';
-  onSelectTab: (tab: 'session' | 'history' | 'lineage' | 'insights' | 'security' | 'legal') => void;
+  currentTab: 'session' | 'history' | 'lineage' | 'insights' | 'security' | 'legal' | 'profile';
+  onSelectTab: (tab: 'session' | 'history' | 'lineage' | 'insights' | 'security' | 'legal' | 'profile') => void;
   onSignOut: () => void;
   personas: UserProfile[];
   onSwitchUser: (uid: string) => void;
@@ -153,9 +154,20 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 id="persona-switcher-btn"
                 onClick={() => setShowSwitchMenu(!showSwitchMenu)}
-                className="flex items-center gap-2 h-9 px-2.5 sm:px-3 bg-white border border-[#1A1A1A]/20 hover:border-[#1A1A1A] text-[#1A1A1A] text-xs transition-colors shadow-2xs"
+                className="flex items-center gap-2 h-9 px-2 sm:px-2.5 bg-white border border-[#1A1A1A]/20 hover:border-[#1A1A1A] text-[#1A1A1A] text-xs transition-colors shadow-2xs"
               >
-                <span className="w-2 h-2 rounded-full bg-[#3B5A30] shrink-0"></span>
+                {user.photoURL ? (
+                  <img
+                    src={user.photoURL}
+                    alt={user.displayName}
+                    referrerPolicy="no-referrer"
+                    className="w-6 h-6 rounded-full object-cover border border-[#1A1A1A]/30 shrink-0"
+                  />
+                ) : (
+                  <div className="w-6 h-6 rounded-full bg-[#1A1A1A] text-white flex items-center justify-center text-[10px] font-serif font-bold shrink-0">
+                    {user.displayName.charAt(0).toUpperCase()}
+                  </div>
+                )}
                 <div className="text-left font-serif hidden sm:block min-w-0">
                   <span className="font-bold text-xs leading-none block truncate">{user.displayName}</span>
                   <span className="text-[10px] text-[#1A1A1A]/50 font-mono block mt-0.5 truncate max-w-[110px]">
@@ -168,16 +180,42 @@ export const Header: React.FC<HeaderProps> = ({
               {/* Dropdown Menu */}
               {showSwitchMenu && (
                 <div className="absolute right-0 mt-2 w-72 bg-[#FAF9F7] border border-[#1A1A1A] shadow-xl z-50 p-2 text-[#1A1A1A] animate-in fade-in zoom-in-95">
-                  <div className="px-3 py-2 border-b border-[#1A1A1A]/10 mb-1">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#1A1A1A]/60">
-                      Authenticated Persona
-                    </p>
-                    <p className="text-xs font-serif font-bold text-[#1A1A1A] mt-0.5">{user.displayName}</p>
-                    <p className="text-[10px] font-mono text-[#1A1A1A]/60 truncate">{user.email}</p>
-                    <div className="mt-1 flex items-center gap-1.5 text-[9px] font-mono text-[#3B5A30] font-bold">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#3B5A30]"></span>
-                      <span>UID: {user.uid}</span>
+                  <div className="px-3 py-2 border-b border-[#1A1A1A]/10 mb-1 flex items-center justify-between">
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#1A1A1A]/60">
+                        Authenticated Persona
+                      </p>
+                      <p className="text-xs font-serif font-bold text-[#1A1A1A] mt-0.5 truncate">{user.displayName}</p>
+                      <p className="text-[10px] font-mono text-[#1A1A1A]/60 truncate">{user.email}</p>
                     </div>
+                    {user.photoURL && (
+                      <img
+                        src={user.photoURL}
+                        alt={user.displayName}
+                        referrerPolicy="no-referrer"
+                        className="w-9 h-9 rounded-full object-cover border border-[#1A1A1A]/30 shrink-0 ml-2"
+                      />
+                    )}
+                  </div>
+
+                  {/* Profile & Photo Direct Action */}
+                  <div className="py-1 border-b border-[#1A1A1A]/10 mb-1">
+                    <button
+                      id="dropdown-edit-profile-btn"
+                      onClick={() => {
+                        setShowSwitchMenu(false);
+                        onSelectTab('profile');
+                      }}
+                      className="w-full text-left px-3 py-2 text-xs font-serif flex items-center justify-between hover:bg-[#F2EFE9] transition-colors font-bold text-[#8C271E]"
+                    >
+                      <div className="flex items-center gap-2">
+                        <User className="w-3.5 h-3.5" />
+                        <span>Profile &amp; Photo Settings</span>
+                      </div>
+                      <span className="text-[9px] font-mono uppercase bg-[#8C271E]/10 text-[#8C271E] px-1.5 py-0.5">
+                        Edit
+                      </span>
+                    </button>
                   </div>
 
                   <div className="py-1">
@@ -308,6 +346,20 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <FileText className="w-3.5 h-3.5 shrink-0" />
               <span>Governance Codex</span>
+            </button>
+
+            {/* Profile & Authorship Tab */}
+            <button
+              id="tab-profile-btn"
+              onClick={() => onSelectTab('profile')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs uppercase tracking-[0.15em] font-bold transition-all border shrink-0 ${
+                currentTab === 'profile'
+                  ? 'bg-[#1A1A1A] text-[#F9F8F6] border-[#1A1A1A] shadow-xs'
+                  : 'bg-white/80 text-[#1A1A1A]/70 border-[#1A1A1A]/15 hover:border-[#1A1A1A]/40 hover:text-[#1A1A1A]'
+              }`}
+            >
+              <User className="w-3.5 h-3.5 shrink-0 text-[#8C271E]" />
+              <span>Profile</span>
             </button>
           </nav>
         </div>

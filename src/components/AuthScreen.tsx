@@ -186,6 +186,10 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               </svg>
               <span>Continue with Apple ID</span>
             </button>
+
+            <p className="text-[10px] font-serif italic text-[#1A1A1A]/60 text-center pt-0.5">
+              ✨ Automatically detects &amp; applies your Google or Apple ID portrait and verified name.
+            </p>
           </div>
 
           {/* Editorial Divider */}

@@ -11,7 +11,23 @@ import {
   ChatMessage,
 } from './geminiService.ts';
 import {
+  checkRateLimit,
+  getAiSecurityDashboardData,
+  detectCrisisAndHarm,
+  detectToxicity,
+  redactPiiAndPhi,
+  detectPromptInjection,
+  setActiveModelVersion,
+  executeRightToBeForgotten,
+  getUserConsent,
+  updateUserConsent,
+  humanReviewQueue,
+  recordAnomalyAlert,
+  UserRole,
+} from './aiSecurityGuard.ts';
+import {
   getUserProfile,
+  updateUserProfile,
   registerUser,
   getAllUsers,
   getUserEntries,
@@ -104,7 +120,7 @@ apiRouter.get('/auth/personas', (_req: Request, res: Response) => {
 
 // Sign In
 apiRouter.post('/auth/login', (req: Request, res: Response) => {
-  const { uid, email, displayName, authProvider } = req.body;
+  const { uid, email, displayName, authProvider, photoURL } = req.body;
   let profile = uid ? getUserProfile(uid) : undefined;
 
   if (!profile && email) {
@@ -124,6 +140,9 @@ apiRouter.post('/auth/login', (req: Request, res: Response) => {
   if (displayName && (!profile.displayName || profile.displayName === 'Guest Member')) {
     profile.displayName = displayName;
   }
+  if (photoURL) {
+    profile.photoURL = photoURL;
+  }
 
   const token = createToken(profile.uid, profile.email, profile.displayName);
   res.json({
@@ -134,12 +153,15 @@ apiRouter.post('/auth/login', (req: Request, res: Response) => {
 
 // Sign Up / Register
 apiRouter.post('/auth/register', (req: Request, res: Response) => {
-  const { email, displayName } = req.body;
+  const { email, displayName, photoURL } = req.body;
   if (!email || !email.includes('@')) {
     return res.status(400).json({ error: 'A valid email is required' });
   }
 
   const profile = registerUser(email, displayName);
+  if (photoURL) {
+    profile.photoURL = photoURL;
+  }
   const token = createToken(profile.uid, profile.email, profile.displayName);
 
   res.json({
@@ -157,11 +179,36 @@ apiRouter.get('/auth/me', verifyAuthToken, (req: AuthenticatedRequest, res: Resp
   res.json({ user: profile });
 });
 
+// Update Current User Profile (Picture, Name, Bio, Intention, Pronouns, Contacts)
+apiRouter.put('/auth/profile', verifyAuthToken, (req: AuthenticatedRequest, res: Response) => {
+  const uid = req.user!.uid;
+  const { displayName, photoURL, bio, role, recoveryContact, sobrietyDate, pronouns, intention } = req.body;
+
+  const updated = updateUserProfile(uid, {
+    ...(displayName ? { displayName } : {}),
+    ...(photoURL !== undefined ? { photoURL } : {}),
+    ...(bio !== undefined ? { bio } : {}),
+    ...(role !== undefined ? { role } : {}),
+    ...(recoveryContact !== undefined ? { recoveryContact } : {}),
+    ...(sobrietyDate !== undefined ? { sobrietyDate } : {}),
+    ...(pronouns !== undefined ? { pronouns } : {}),
+    ...(intention !== undefined ? { intention } : {}),
+  });
+
+  if (!updated) {
+    return res.status(404).json({ error: 'User profile not found for update' });
+  }
+
+  // Also issue fresh token with updated display name
+  const token = createToken(updated.uid, updated.email, updated.displayName);
+  res.json({ user: updated, token });
+});
+
 // ----------------------------------------------------
 // Chat & Session Routes (Server-Side Gemini Integration with Memory Consent)
 // ----------------------------------------------------
 
-// Send message in an ongoing session (injects ONLY user-consented memories)
+// Send message in an ongoing session (injects ONLY user-consented memories + enforces AI Security Guard)
 apiRouter.post('/session/message', verifyAuthToken, async (req: AuthenticatedRequest, res: Response) => {
   const { message, conversationHistory } = req.body;
   if (!message || typeof message !== 'string') {
@@ -169,18 +216,48 @@ apiRouter.post('/session/message', verifyAuthToken, async (req: AuthenticatedReq
   }
 
   const uid = req.user!.uid;
+
+  // Rate Limiting Protection (30 requests/minute per UID)
+  const rateCheck = checkRateLimit(uid, 30);
+  if (!rateCheck.allowed) {
+    return res.status(429).json({
+      error: 'Too Many Requests: Rate limit exceeded (30 requests/minute threshold). Please pause before sending another message.',
+      rateLimitRemaining: 0,
+    });
+  }
+
   const history: ChatMessage[] = Array.isArray(conversationHistory) ? conversationHistory : [];
 
   // Memory Consent Ledger: Retrieve strictly consented memories
   const activeMemories = getActiveMemoriesForPrompt(uid);
 
+  const profile = getUserProfile(uid);
+  const userRole: UserRole = (profile?.role as UserRole) || 'patient';
+  const displayName = profile?.displayName || req.user?.displayName || 'Journaler';
+
   try {
-    const reply = await generateChatReply(history, message, activeMemories);
+    const result = await generateChatReply(
+      history,
+      message,
+      activeMemories,
+      uid,
+      userRole,
+      displayName
+    );
     const turnCount = history.filter((m) => m.role === 'user').length + 1;
     res.json({
-      reply,
+      reply: result.reply,
       turnCount,
       activeMemoriesCount: activeMemories.length,
+      safety: {
+        crisisSignals: result.crisisSignals,
+        phiRedaction: result.phiRedaction,
+        promptInjectionBlocked: result.promptInjectionBlocked,
+        outputValidationFlags: result.outputValidationFlags,
+        auditLogId: result.auditLogId,
+        latencyMs: result.latencyMs,
+        rateLimitRemaining: rateCheck.remaining,
+      },
     });
   } catch (error) {
     console.error('API Error in /session/message:', error);
@@ -606,3 +683,137 @@ apiRouter.get('/security/posture', verifyAuthToken, (req: AuthenticatedRequest, 
     auditLogs: recentLogs,
   });
 });
+
+// ----------------------------------------------------
+// AI Security & Health/Crisis Protection Endpoints
+// ----------------------------------------------------
+
+// Get comprehensive AI Safety & Governance Dashboard
+apiRouter.get('/security/ai-safety-dashboard', verifyAuthToken, (req: AuthenticatedRequest, res: Response) => {
+  const uid = req.user!.uid;
+  const data = getAiSecurityDashboardData(uid);
+  res.json(data);
+});
+
+// Live Test: Content Safety & Crisis/Toxicity detection
+apiRouter.post('/security/test-content-safety', verifyAuthToken, (req: AuthenticatedRequest, res: Response) => {
+  const { text } = req.body;
+  if (!text || typeof text !== 'string') {
+    return res.status(400).json({ error: 'text is required' });
+  }
+  const crisis = detectCrisisAndHarm(text);
+  const toxicity = detectToxicity(text);
+  res.json({ crisis, toxicity });
+});
+
+// Live Test: PII / PHI Redaction Engine (AWS Comprehend Medical simulation)
+apiRouter.post('/security/test-phi-redaction', verifyAuthToken, (req: AuthenticatedRequest, res: Response) => {
+  const { text } = req.body;
+  if (!text || typeof text !== 'string') {
+    return res.status(400).json({ error: 'text is required' });
+  }
+  const redaction = redactPiiAndPhi(text);
+  res.json(redaction);
+});
+
+// Live Test: Prompt Injection & Jailbreak Scanner
+apiRouter.post('/security/test-prompt-injection', verifyAuthToken, (req: AuthenticatedRequest, res: Response) => {
+  const { text } = req.body;
+  if (!text || typeof text !== 'string') {
+    return res.status(400).json({ error: 'text is required' });
+  }
+  const injection = detectPromptInjection(text);
+  res.json(injection);
+});
+
+// Human-in-the-Loop Review: Resolve or update crisis flag
+apiRouter.post('/security/flagged-reviews/:reviewId/resolve', verifyAuthToken, (req: AuthenticatedRequest, res: Response) => {
+  const { reviewId } = req.params;
+  const { status, clinicalNotes, assignedCareProvider } = req.body;
+
+  const item = humanReviewQueue.find((r) => r.id === reviewId);
+  if (!item) {
+    return res.status(404).json({ error: 'Review item not found' });
+  }
+
+  if (status) item.status = status;
+  if (clinicalNotes) item.clinicalNotes = clinicalNotes;
+  if (assignedCareProvider) item.assignedCareProvider = assignedCareProvider;
+  item.resolvedAt = new Date().toISOString();
+
+  res.json({ success: true, item });
+});
+
+// Model Governance: Switch active prompt/model version or rollback
+apiRouter.post('/security/model-version', verifyAuthToken, (req: AuthenticatedRequest, res: Response) => {
+  const { versionId } = req.body;
+  if (!versionId) {
+    return res.status(400).json({ error: 'versionId is required' });
+  }
+  try {
+    const updated = setActiveModelVersion(versionId);
+    res.json({ success: true, activeVersion: updated });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Compliance: Right to be Forgotten (Cryptographic zero-retention data shredder)
+apiRouter.post('/security/right-to-be-forgotten', verifyAuthToken, (req: AuthenticatedRequest, res: Response) => {
+  const uid = req.user!.uid;
+  const receipt = executeRightToBeForgotten(uid);
+  deleteUserAccount(uid);
+  res.json({ success: true, receipt });
+});
+
+// Compliance: Get Consent Settings
+apiRouter.get('/security/consent', verifyAuthToken, (req: AuthenticatedRequest, res: Response) => {
+  const uid = req.user!.uid;
+  const consent = getUserConsent(uid);
+  res.json(consent);
+});
+
+// Compliance: Update Granular Consent Preferences
+apiRouter.post('/security/consent', verifyAuthToken, (req: AuthenticatedRequest, res: Response) => {
+  const uid = req.user!.uid;
+  const updated = updateUserConsent(uid, req.body);
+  res.json(updated);
+});
+
+// Access Control: Verify Multi-Factor Authentication (MFA)
+apiRouter.post('/security/mfa/verify', verifyAuthToken, (req: AuthenticatedRequest, res: Response) => {
+  const { code } = req.body;
+  if (!code || typeof code !== 'string') {
+    return res.status(400).json({ error: 'MFA code is required' });
+  }
+
+  // Accept demo passcode '882041' or any 6-digit numeric string for simulation
+  const isValid = /^\d{6}$/.test(code.trim());
+  if (!isValid) {
+    return res.status(400).json({ error: 'Invalid MFA verification code format. Expected 6 digits.' });
+  }
+
+  res.json({
+    verified: true,
+    mfaMethod: 'TOTP_AUTHENTICATOR_APP',
+    mfaSessionExpiresAt: new Date(Date.now() + 3600000).toISOString(), // 1 hour
+    message: 'Multi-factor authentication successfully confirmed. Sensitive access granted.',
+  });
+});
+
+// RBAC: Switch simulated role for instant perspective testing
+apiRouter.post('/security/role/switch', verifyAuthToken, (req: AuthenticatedRequest, res: Response) => {
+  const uid = req.user!.uid;
+  const { role } = req.body;
+  if (!['patient', 'care_provider', 'admin'].includes(role)) {
+    return res.status(400).json({ error: 'Invalid role. Must be patient, care_provider, or admin.' });
+  }
+
+  const profile = getUserProfile(uid);
+  if (profile) {
+    profile.role = role;
+  }
+
+  res.json({ success: true, role, user: profile });
+});
+

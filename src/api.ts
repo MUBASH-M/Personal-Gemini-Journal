@@ -8,6 +8,17 @@ import {
   IdeaLineageThread,
   MemoryConsentItem,
   EmotionalWeatherForecast,
+  AiSecurityDashboardData,
+  CrisisDetectionResult,
+  ToxicityDetectionResult,
+  PhiRedactionResult,
+  PromptInjectionResult,
+  HumanReviewItem,
+  ModelPromptVersion,
+  DataPurgeReceipt,
+  UserConsentPreferences,
+  UserRole,
+  MessageSafetyMetadata,
 } from './types';
 
 const TOKEN_KEY = 'pgj_session_token';
@@ -84,22 +95,45 @@ export async function login(
   uid?: string,
   email?: string,
   displayName?: string,
-  authProvider?: string
+  authProvider?: string,
+  photoURL?: string
 ): Promise<{ token: string; user: UserProfile }> {
   const res = await request<{ token: string; user: UserProfile }>('/api/auth/login', {
     method: 'POST',
-    body: JSON.stringify({ uid, email, displayName, authProvider }),
+    body: JSON.stringify({ uid, email, displayName, authProvider, photoURL }),
   });
   setStoredSession(res.token, res.user);
   return res;
 }
 
-export async function register(email: string, displayName: string): Promise<{ token: string; user: UserProfile }> {
+export async function register(
+  email: string,
+  displayName: string,
+  photoURL?: string
+): Promise<{ token: string; user: UserProfile }> {
   const res = await request<{ token: string; user: UserProfile }>('/api/auth/register', {
     method: 'POST',
-    body: JSON.stringify({ email, displayName }),
+    body: JSON.stringify({ email, displayName, photoURL }),
   });
   setStoredSession(res.token, res.user);
+  return res;
+}
+
+export async function updateUserProfileApi(
+  updates: Partial<UserProfile>
+): Promise<{ user: UserProfile; token?: string }> {
+  const res = await request<{ user: UserProfile; token?: string }>('/api/auth/profile', {
+    method: 'PUT',
+    body: JSON.stringify(updates),
+  });
+  if (res.token) {
+    setStoredSession(res.token, res.user);
+  } else {
+    const existingToken = getStoredToken();
+    if (existingToken) {
+      setStoredSession(existingToken, res.user);
+    }
+  }
   return res;
 }
 
@@ -107,8 +141,8 @@ export async function register(email: string, displayName: string): Promise<{ to
 export async function sendChatMessage(
   message: string,
   conversationHistory: ChatMessage[]
-): Promise<{ reply: string; turnCount: number; activeMemoriesCount?: number }> {
-  return request<{ reply: string; turnCount: number; activeMemoriesCount?: number }>('/api/session/message', {
+): Promise<{ reply: string; turnCount: number; activeMemoriesCount?: number; safety?: MessageSafetyMetadata }> {
+  return request<{ reply: string; turnCount: number; activeMemoriesCount?: number; safety?: MessageSafetyMetadata }>('/api/session/message', {
     method: 'POST',
     body: JSON.stringify({ message, conversationHistory }),
   });
@@ -327,3 +361,116 @@ export async function unlockTimeCapsuleKey(
 export async function getEmotionalWeatherForecast(): Promise<EmotionalWeatherForecast> {
   return request<EmotionalWeatherForecast>('/api/forecast/emotional-weather');
 }
+
+// ----------------------------------------------------
+// AI Security & Health/Crisis Protection API
+// ----------------------------------------------------
+
+export async function getAiSecurityDashboard(): Promise<AiSecurityDashboardData> {
+  return request<AiSecurityDashboardData>('/api/security/ai-safety-dashboard');
+}
+
+export async function testContentSafety(
+  text: string
+): Promise<{ crisis: CrisisDetectionResult; toxicity: ToxicityDetectionResult }> {
+  return request<{ crisis: CrisisDetectionResult; toxicity: ToxicityDetectionResult }>(
+    '/api/security/test-content-safety',
+    {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    }
+  );
+}
+
+export async function testPhiRedaction(text: string): Promise<PhiRedactionResult> {
+  return request<PhiRedactionResult>('/api/security/test-phi-redaction', {
+    method: 'POST',
+    body: JSON.stringify({ text }),
+  });
+}
+
+export async function testPromptInjection(text: string): Promise<PromptInjectionResult> {
+  return request<PromptInjectionResult>('/api/security/test-prompt-injection', {
+    method: 'POST',
+    body: JSON.stringify({ text }),
+  });
+}
+
+export async function resolveHumanReviewItem(
+  reviewId: string,
+  updates: { status: string; clinicalNotes?: string; assignedCareProvider?: string }
+): Promise<{ success: boolean; item: HumanReviewItem }> {
+  return request<{ success: boolean; item: HumanReviewItem }>(
+    `/api/security/flagged-reviews/${reviewId}/resolve`,
+    {
+      method: 'POST',
+      body: JSON.stringify(updates),
+    }
+  );
+}
+
+export async function updateModelPromptVersion(
+  versionId: string
+): Promise<{ success: boolean; activeVersion: ModelPromptVersion }> {
+  return request<{ success: boolean; activeVersion: ModelPromptVersion }>('/api/security/model-version', {
+    method: 'POST',
+    body: JSON.stringify({ versionId }),
+  });
+}
+
+export async function requestRightToBeForgotten(): Promise<{ success: boolean; receipt: DataPurgeReceipt }> {
+  const res = await request<{ success: boolean; receipt: DataPurgeReceipt }>(
+    '/api/security/right-to-be-forgotten',
+    {
+      method: 'POST',
+      body: JSON.stringify({ confirm: true }),
+    }
+  );
+  clearStoredSession();
+  return res;
+}
+
+export async function getUserConsentPreferences(): Promise<UserConsentPreferences> {
+  return request<UserConsentPreferences>('/api/security/consent');
+}
+
+export async function updateUserConsentPreferences(
+  preferences: Partial<UserConsentPreferences>
+): Promise<UserConsentPreferences> {
+  return request<UserConsentPreferences>('/api/security/consent', {
+    method: 'POST',
+    body: JSON.stringify(preferences),
+  });
+}
+
+export async function verifyMfaCode(
+  code: string
+): Promise<{ verified: boolean; mfaMethod: string; mfaSessionExpiresAt: string; message: string }> {
+  return request<{ verified: boolean; mfaMethod: string; mfaSessionExpiresAt: string; message: string }>(
+    '/api/security/mfa/verify',
+    {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    }
+  );
+}
+
+export async function switchUserRole(
+  role: UserRole
+): Promise<{ success: boolean; role: UserRole; user: UserProfile }> {
+  const res = await request<{ success: boolean; role: UserRole; user: UserProfile }>(
+    '/api/security/role/switch',
+    {
+      method: 'POST',
+      body: JSON.stringify({ role }),
+    }
+  );
+  const current = getStoredUser();
+  if (current) {
+    current.role = role;
+    const token = getStoredToken();
+    if (token) setStoredSession(token, current);
+  }
+  return res;
+}
+

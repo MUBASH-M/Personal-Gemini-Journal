@@ -4,6 +4,18 @@
  * Enforces Memory Consent Ledger filtering (only user-consented context injected).
  */
 import { GoogleGenAI, Type } from '@google/genai';
+import {
+  detectCrisisAndHarm,
+  redactPiiAndPhi,
+  detectPromptInjection,
+  validateModelOutput,
+  recordSafetyAuditLog,
+  recordHumanReviewItem,
+  getActiveModelVersion,
+  CrisisDetectionResult,
+  PhiRedactionResult,
+  UserRole,
+} from './aiSecurityGuard.ts';
 
 // Lazy initialization of GoogleGenAI
 let aiClient: GoogleGenAI | null = null;
@@ -38,8 +50,18 @@ export interface SessionSummaryResult {
   keyTakeaway: string;
 }
 
-const BASE_SYSTEM_INSTRUCTION = `You are a thoughtful, empathetic, and security-conscious journaling companion in the Personal Gemini Journal.
-Your role is to help the user unpack their day, untangle complex feelings, or brainstorm creative ideas.
+export interface SafeChatReplyResult {
+  reply: string;
+  crisisSignals: CrisisDetectionResult;
+  phiRedaction: PhiRedactionResult;
+  promptInjectionBlocked: boolean;
+  outputValidationFlags: string[];
+  auditLogId: string;
+  latencyMs: number;
+}
+
+const BASE_SYSTEM_INSTRUCTION = `You are a thoughtful, empathetic, and security-conscious journaling and recovery companion in the Personal Gemini Journal.
+Your role is to help the user unpack their day, untangle complex feelings, or process recovery thoughts safely.
 Guidelines:
 - Listen actively and respond with warmth, clarity, and curiosity.
 - Ask one gentle, thought-provoking follow-up question per turn to help them go deeper.
@@ -50,49 +72,160 @@ Guidelines:
 export async function generateChatReply(
   history: ChatMessage[],
   newMessage: string,
-  consentedMemories: string[] = []
-): Promise<string> {
+  consentedMemories: string[] = [],
+  callerUid = 'usr_default',
+  callerRole: UserRole = 'patient',
+  callerDisplayName = 'Journaler'
+): Promise<SafeChatReplyResult> {
+  const startTime = Date.now();
   const ai = getAiClient();
+  const activeVersion = getActiveModelVersion();
 
-  let systemInstruction = BASE_SYSTEM_INSTRUCTION;
+  // 1. Model Security: Prompt Injection Detection
+  const injectionCheck = detectPromptInjection(newMessage);
+  if (injectionCheck.isInjection) {
+    const auditLog = recordSafetyAuditLog({
+      callerUid,
+      userRole: callerRole,
+      endpoint: '/session/message',
+      promptLength: newMessage.length,
+      responseLength: 0,
+      phiRedactionsCount: 0,
+      phiTypesRedacted: [],
+      riskTier: 'MODERATE',
+      isPromptInjection: true,
+      escalationTriggered: false,
+      modelId: 'gemini-3.8-flash',
+      promptVersion: activeVersion.version,
+      latencyMs: Date.now() - startTime,
+      humanReviewStatus: 'NOT_APPLICABLE',
+    });
+
+    return {
+      reply: `[System Security Notice]: Your input was flagged for attempted system prompt modification or jailbreak patterns and has been safely neutralized. Please continue your reflective journal dialogue naturally.`,
+      crisisSignals: {
+        hasCrisisSignals: false,
+        riskScore: 0,
+        severityTier: 'LOW',
+        flaggedKeywords: [],
+        escalationRequired: false,
+      },
+      phiRedaction: {
+        sanitizedText: newMessage,
+        originalText: newMessage,
+        redactionCount: 0,
+        redactedTypes: [],
+        wasRedacted: false,
+        redactionTokens: [],
+      },
+      promptInjectionBlocked: true,
+      outputValidationFlags: ['PROMPT_INJECTION_BLOCKED'],
+      auditLogId: auditLog.id,
+      latencyMs: Date.now() - startTime,
+    };
+  }
+
+  // 2. Data Privacy: PII & PHI Redaction Engine (AWS Comprehend Medical inspired)
+  const phiRedaction = redactPiiAndPhi(newMessage);
+  const sanitizedUserMessage = phiRedaction.sanitizedText;
+
+  // Also ensure historical messages sent to the AI are sanitized
+  const sanitizedHistory = history.map((msg) => ({
+    role: msg.role,
+    text: redactPiiAndPhi(msg.text).sanitizedText,
+  }));
+
+  // 3. AI Content Safety: Real-time Crisis & Harm Detection (Llama Guard inspired)
+  const crisisSignals = detectCrisisAndHarm(newMessage);
+
+  let humanReviewId: string | undefined;
+  if (crisisSignals.escalationRequired) {
+    // Flag conversation for human review & care provider oversight
+    const reviewItem = recordHumanReviewItem({
+      callerUid,
+      userDisplayName: callerDisplayName,
+      severity: crisisSignals.severityTier === 'HIGH_CRISIS' ? 'HIGH_CRISIS' : 'ELEVATED',
+      triggerReason: `Crisis signal [${crisisSignals.crisisCategory || 'acute_distress'}] detected via real-time safety scanner`,
+      flaggedSnippet: newMessage.substring(0, 140),
+    });
+    humanReviewId = reviewItem.id;
+  }
+
+  // Prepare system instructions with active governance layer
+  let systemInstruction = `${BASE_SYSTEM_INSTRUCTION}\n\n[Active Security & Governance Addendum - ${activeVersion.name} (${activeVersion.version})]:\n${activeVersion.systemInstructionAddendum}`;
+
+  // Data minimization: inject strictly consented memories
   if (consentedMemories.length > 0) {
     systemInstruction += `\n\n--- MEMORY CONSENT LEDGER CONTEXT ---\nThe user has explicitly consented to granting you access to the following historical journal memory snippets:\n${consentedMemories
-      .map((m, i) => `[Memory #${i + 1}]: ${m}`)
+      .map((m, i) => `[Memory #${i + 1}]: ${redactPiiAndPhi(m).sanitizedText}`)
       .join('\n')}\nUse these memories subtly to foster empathetic continuity when relevant, but never force them unnecessarily.`;
   }
 
+  let rawReply = '';
   if (!ai) {
-    // Graceful fallback if GEMINI_API_KEY is not configured
-    return fallbackChatReply(history, newMessage, consentedMemories);
+    rawReply = fallbackChatReply(sanitizedHistory, sanitizedUserMessage, consentedMemories);
+  } else {
+    try {
+      const contents = sanitizedHistory.map((msg) => ({
+        role: msg.role === 'user' ? 'user' : 'model',
+        parts: [{ text: msg.text }],
+      }));
+
+      contents.push({
+        role: 'user',
+        parts: [{ text: sanitizedUserMessage }],
+      });
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: contents,
+        config: {
+          systemInstruction,
+          temperature: 0.7,
+        },
+      });
+
+      rawReply = response.text || "I'm listening closely. Tell me more about what that felt like.";
+    } catch (error) {
+      console.error('Error in Gemini generateChatReply:', error);
+      rawReply = fallbackChatReply(sanitizedHistory, sanitizedUserMessage, consentedMemories);
+    }
   }
 
-  try {
-    // Format conversation history for Gemini
-    const contents = history.map((msg) => ({
-      role: msg.role === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.text }],
-    }));
+  // 4. Output Validation & Medical Sanity Checking
+  const validation = validateModelOutput(rawReply, crisisSignals.hasCrisisSignals);
+  const validatedReply = validation.sanitizedOutput;
+  const latencyMs = Date.now() - startTime;
 
-    // Add current user message
-    contents.push({
-      role: 'user',
-      parts: [{ text: newMessage }],
-    });
+  // 5. Full Audit Log Recording
+  const auditLog = recordSafetyAuditLog({
+    callerUid,
+    userRole: callerRole,
+    endpoint: '/session/message',
+    promptLength: newMessage.length,
+    responseLength: validatedReply.length,
+    phiRedactionsCount: phiRedaction.redactionCount,
+    phiTypesRedacted: phiRedaction.redactedTypes,
+    riskTier: crisisSignals.severityTier,
+    crisisCategory: crisisSignals.crisisCategory,
+    isPromptInjection: false,
+    escalationTriggered: crisisSignals.escalationRequired,
+    modelId: 'gemini-3.8-flash',
+    promptVersion: activeVersion.version,
+    latencyMs,
+    humanReviewStatus: crisisSignals.escalationRequired ? 'PENDING' : 'NOT_APPLICABLE',
+    humanReviewId,
+  });
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents: contents,
-      config: {
-        systemInstruction,
-        temperature: 0.7,
-      },
-    });
-
-    return response.text || "I'm listening closely. Tell me more about what that felt like.";
-  } catch (error) {
-    console.error('Error in Gemini generateChatReply:', error);
-    return fallbackChatReply(history, newMessage, consentedMemories);
-  }
+  return {
+    reply: validatedReply,
+    crisisSignals,
+    phiRedaction,
+    promptInjectionBlocked: false,
+    outputValidationFlags: validation.flags,
+    auditLogId: auditLog.id,
+    latencyMs,
+  };
 }
 
 export async function summarizeSession(

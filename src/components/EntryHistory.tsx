@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { JournalEntry, JournalEdition } from '../types';
 import { getMoodDetails, formatDate } from '../utils/theme';
 import { unlockTimeCapsuleKey } from '../api';
@@ -421,7 +422,12 @@ export const EntryHistory: React.FC<EntryHistoryProps> = ({
             Retrieving vault chronicles...
           </div>
         ) : filteredEntries.length === 0 ? (
-          <div className="bg-white p-12 text-center border border-[#1A1A1A]/15 shadow-2xs">
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="bg-white p-12 text-center border border-[#1A1A1A]/15 shadow-2xs"
+          >
             <div className="w-12 h-12 border border-[#1A1A1A]/20 bg-[#F9F8F6] text-[#1A1A1A]/50 flex items-center justify-center mx-auto mb-3 font-serif text-lg italic">
               ¶
             </div>
@@ -440,27 +446,37 @@ export const EntryHistory: React.FC<EntryHistoryProps> = ({
                 <span>Begin First Reflection</span>
               </button>
             )}
-          </div>
+          </motion.div>
         ) : (
-          filteredEntries.map((entry) => {
-            const moodInfo = getMoodDetails(entry.mood);
-            const isExpanded = expandedId === entry.entryId;
-            const isCapsule = entry.isTimeCapsule;
-            const isUnlocked = entry.isUnlocked || Boolean(decryptedCapsules[entry.entryId]);
-            const decryptedText = decryptedCapsules[entry.entryId];
-            const notice = capsuleStatusNotice[entry.entryId];
+          <AnimatePresence mode="popLayout">
+            {filteredEntries.map((entry, index) => {
+              const moodInfo = getMoodDetails(entry.mood);
+              const isExpanded = expandedId === entry.entryId;
+              const isCapsule = entry.isTimeCapsule;
+              const isUnlocked = entry.isUnlocked || Boolean(decryptedCapsules[entry.entryId]);
+              const decryptedText = decryptedCapsules[entry.entryId];
+              const notice = capsuleStatusNotice[entry.entryId];
 
-            return (
-              <div
-                key={entry.entryId}
-                id={`entry-card-${entry.entryId}`}
-                className={`bg-white border transition-all overflow-hidden ${
-                  isCapsule
-                    ? 'border-[#8C271E]/40 shadow-xs'
-                    : 'border-[#1A1A1A]/15 shadow-2xs hover:border-[#1A1A1A]/40'
-                }`}
-              >
-                {/* Entry Card Header */}
+              return (
+                <motion.div
+                  key={entry.entryId}
+                  id={`entry-card-${entry.entryId}`}
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.2 } }}
+                  transition={{
+                    duration: 0.42,
+                    delay: Math.min(index * 0.045, 0.35),
+                    ease: [0.16, 1, 0.3, 1],
+                  }}
+                  layout="position"
+                  className={`bg-white border transition-colors overflow-hidden ${
+                    isCapsule
+                      ? 'border-[#8C271E]/40 shadow-xs'
+                      : 'border-[#1A1A1A]/15 shadow-2xs hover:border-[#1A1A1A]/40'
+                  }`}
+                >
+                  {/* Entry Card Header */}
                 <div
                   onClick={() => toggleExpand(entry.entryId)}
                   className="p-5 sm:p-6 flex items-start justify-between gap-3 cursor-pointer hover:bg-[#FAF9F7] transition-colors"
@@ -618,8 +634,15 @@ export const EntryHistory: React.FC<EntryHistoryProps> = ({
                 </div>
 
                 {/* Expanded Details */}
-                {isExpanded && (
-                  <div className="px-6 pb-6 pt-3 border-t border-[#1A1A1A]/10 bg-[#FAF9F7] space-y-4">
+                <AnimatePresence>
+                  {isExpanded && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      transition={{ duration: 0.22, ease: 'easeOut' }}
+                      className="px-6 pb-6 pt-3 border-t border-[#1A1A1A]/10 bg-[#FAF9F7] space-y-4"
+                    >
                     {/* Time Capsule Controls */}
                     {isCapsule && (
                       <div className="p-4 bg-white border border-[#8C271E]/30 space-y-3">
@@ -733,13 +756,15 @@ export const EntryHistory: React.FC<EntryHistoryProps> = ({
                         ))}
                       </div>
                     )}
-                  </div>
-                )}
-              </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
             );
-          })
-        )}
-      </div>
+          })}
+        </AnimatePresence>
+      )}
+    </div>
 
       {/* Delete Confirmation Modal */}
       {entryToDelete && (
