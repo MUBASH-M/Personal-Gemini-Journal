@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "entities": {
+    "UserProfile": {
+      "path": "/users/{userId}",
+      "description": "User profile and settings",
+      "fields": {
+        "uid": { "type": "string", "description": "User unique identifier" },
+        "email": { "type": "string", "description": "User email address" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "role": { "type": "string", "description": "User role or designation" },
+        "createdAt": { "type": "string", "description": "ISO timestamp of account creation" }
+      }
+    },
+    "JournalEntry": {
+      "path": "/users/{userId}/entries/{entryId}",
+      "description": "Individual confidential journal reflection and summary",
+      "fields": {
+        "entryId": { "type": "string", "description": "Unique entry identifier" },
+        "uid": { "type": "string", "description": "Owner user ID matching userId" },
+        "summary": { "type": "string", "description": "Synthesized reflection summary" },
+        "mood": { "type": "string", "description": "Primary emotional tone" },
+        "themes": { "type": "array", "description": "Array of topical themes" },
+        "keyTakeaway": { "type": "string", "description": "Actionable insight or realization", "optional": true },
+        "createdAt": { "type": "string", "description": "ISO timestamp of entry creation" },
+        "turnCount": { "type": "number", "description": "Count of interactive turns" },
+        "messages": { "type": "array", "description": "Transcript of conversational dialogue", "optional": true }
+      }
+    }
+  }
+}

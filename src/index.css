@@ -1,16 +1,29 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @layer base {
   body {
     background-color: #F9F8F6;
     color: #1A1A1A;
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
     -webkit-font-smoothing: antialiased;
+    transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+  }
+
+  html.dark body {
+    background-color: #141413;
+    color: #EDE9DF;
   }
 
   ::selection {
     background-color: #1A1A1A;
     color: #F9F8F6;
+  }
+
+  html.dark ::selection {
+    background-color: #EDE9DF;
+    color: #141413;
   }
 }
 
@@ -41,3 +54,166 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #1A1A1A;
 }
+
+/* Dark Mode Scrollbars */
+html.dark ::-webkit-scrollbar-track {
+  background: #1A1A18;
+}
+html.dark ::-webkit-scrollbar-thumb {
+  background: #383733;
+}
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #EDE9DF;
+}
+
+/* ==========================================================================
+   DEEP PAPER-INK NIGHT LEDGER STYLING
+   ========================================================================== */
+
+html.dark {
+  color-scheme: dark;
+}
+
+/* Background surfaces in deep paper-ink */
+html.dark .bg-\[\#F9F8F6\],
+html.dark .bg-\[\#FAF9F7\],
+html.dark .bg-\[\#F7F5F0\],
+html.dark .bg-\[\#F5F4F0\] {
+  background-color: #141413 !important;
+}
+
+html.dark .bg-white {
+  background-color: #1D1D1B !important;
+}
+
+html.dark .bg-\[\#F2EFE9\],
+html.dark .bg-\[\#EFECE6\],
+html.dark .bg-\[\#EDEAE3\],
+html.dark .hover\:bg-\[\#F2EFE9\]:hover,
+html.dark .hover\:bg-\[\#EDEAE3\]:hover {
+  background-color: #262623 !important;
+}
+
+html.dark .bg-\[\#E5E3DF\]\/50,
+html.dark .bg-\[\#E5E3DF\]\/60,
+html.dark .bg-\[\#E5E3DF\]\/70,
+html.dark .hover\:bg-\[\#E5E3DF\]\/60:hover,
+html.dark .hover\:bg-\[\#E5E3DF\]\/70:hover {
+  background-color: rgba(45, 45, 41, 0.75) !important;
+}
+
+/* Deep parchment text tones */
+html.dark .text-\[\#1A1A1A\] {
+  color: #EDE9DF !important;
+}
+
+html.dark .text-\[\#1A1A1A\]\/80 {
+  color: #D6D2C8 !important;
+}
+
+html.dark .text-\[\#1A1A1A\]\/70 {
+  color: #BBB7AD !important;
+}
+
+html.dark .text-\[\#1A1A1A\]\/60 {
+  color: #9E9A90 !important;
+}
+
+html.dark .text-\[\#1A1A1A\]\/50 {
+  color: #827E75 !important;
+}
+
+html.dark .text-\[\#1A1A1A\]\/40 {
+  color: #6C6860 !important;
+}
+
+html.dark .text-\[\#1A1A1A\]\/30,
+html.dark .text-\[\#1A1A1A\]\/25 {
+  color: #55524B !important;
+}
+
+/* Border rules */
+html.dark .border-\[\#1A1A1A\],
+html.dark .border-\[\#1A1A1A\]\/40 {
+  border-color: rgba(237, 233, 224, 0.35) !important;
+}
+
+html.dark .border-\[\#1A1A1A\]\/20,
+html.dark .border-\[\#1A1A1A\]\/15,
+html.dark .border-\[\#1A1A1A\]\/10,
+html.dark .border-\[\#1A1A1A\]\/5 {
+  border-color: rgba(237, 233, 224, 0.14) !important;
+}
+
+/* Header blur styling in dark mode */
+html.dark header#app-header {
+  background-color: rgba(20, 20, 19, 0.94) !important;
+  border-color: rgba(237, 233, 224, 0.14) !important;
+}
+
+/* Primary buttons & active tabs in night ledger */
+html.dark button.bg-\[\#1A1A1A\],
+html.dark a.bg-\[\#1A1A1A\],
+html.dark input[type="submit"].bg-\[\#1A1A1A\] {
+  background-color: #EDE9DF !important;
+  color: #141413 !important;
+  border-color: #EDE9DF !important;
+}
+
+html.dark button.bg-\[\#1A1A1A\]:hover,
+html.dark button.hover\:bg-black:hover {
+  background-color: #FFFFFF !important;
+  color: #000000 !important;
+  border-color: #FFFFFF !important;
+}
+
+/* Seal / Avatar blocks */
+html.dark div.bg-\[\#1A1A1A\] {
+  background-color: #292926 !important;
+  color: #EDE9DF !important;
+  border-color: rgba(237, 233, 224, 0.3) !important;
+}
+
+/* Form controls */
+html.dark input,
+html.dark textarea,
+html.dark select {
+  background-color: #191917 !important;
+  color: #EDE9DF !important;
+  border-color: rgba(237, 233, 224, 0.18) !important;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #726E66 !important;
+}
+
+html.dark input:focus,
+html.dark textarea:focus {
+  border-color: #EDE9DF !important;
+  outline: none;
+}
+
+/* Night Accent Red (softer cinnabar for dark backgrounds) */
+html.dark .text-\[\#8C271E\] {
+  color: #E26A5E !important;
+}
+
+html.dark .border-t-\[\#8C271E\] {
+  border-top-color: #E26A5E !important;
+}
+
+/* Dropdowns & Popovers */
+html.dark #user-switch-dropdown,
+html.dark .popover-surface {
+  background-color: #1E1E1C !important;
+  border-color: rgba(237, 233, 224, 0.25) !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.7), 0 8px 10px -6px rgba(0, 0, 0, 0.7) !important;
+}
+
+/* Code & Terminal Panels */
+html.dark .font-mono.bg-\[\#1A1A1A\] {
+  background-color: #0E0E0D !important;
+  border-color: rgba(237, 233, 224, 0.2) !important;
+}
+

@@ -1,9 +1,15 @@
 /**
  * Express API Router for Personal Gemini Journal
  * Enforces server-side authentication token validation, UID extraction, and zero-trust boundaries.
+ * Hosts endpoints for Tamper-Evident Hash Chains, Idea Lineages, Memory Consent, Time Capsules, and Emotional Weather.
  */
 import { Router, Request, Response, NextFunction } from 'express';
-import { generateChatReply, summarizeSession, ChatMessage } from './geminiService.ts';
+import {
+  generateChatReply,
+  summarizeSession,
+  traceIdeaSemanticEvolution,
+  ChatMessage,
+} from './geminiService.ts';
 import {
   getUserProfile,
   registerUser,
@@ -13,6 +19,16 @@ import {
   deleteUserEntry,
   deleteUserAccount,
   getAuditLogs,
+  verifyUserLedger,
+  simulateTamperAttempt,
+  restoreLedgerIntegrity,
+  getUserLineageThreads,
+  getMemoryConsentLedger,
+  toggleEntryMemoryConsent,
+  getActiveMemoriesForPrompt,
+  sealTimeCapsuleKey,
+  unlockTimeCapsuleKey,
+  getEmotionalWeatherForecast,
   JournalEntry,
 } from './storageService.ts';
 
@@ -88,7 +104,7 @@ apiRouter.get('/auth/personas', (_req: Request, res: Response) => {
 
 // Sign In
 apiRouter.post('/auth/login', (req: Request, res: Response) => {
-  const { uid, email } = req.body;
+  const { uid, email, displayName, authProvider } = req.body;
   let profile = uid ? getUserProfile(uid) : undefined;
 
   if (!profile && email) {
@@ -98,55 +114,73 @@ apiRouter.post('/auth/login', (req: Request, res: Response) => {
 
   if (!profile) {
     // If not found, auto-create a user profile for smooth testing
-    profile = registerUser(email || 'newuser@example.com', email ? email.split('@')[0] : 'New Journaler');
+    const nameToUse = displayName || (email ? email.split('@')[0] : 'Guest Member');
+    profile = registerUser(email || 'guest@example.com', nameToUse);
+  }
+
+  if (authProvider) {
+    (profile as any).authProvider = authProvider;
+  }
+  if (displayName && (!profile.displayName || profile.displayName === 'Guest Member')) {
+    profile.displayName = displayName;
   }
 
   const token = createToken(profile.uid, profile.email, profile.displayName);
   res.json({
-    token,
     user: profile,
+    token,
   });
 });
 
-// Register
+// Sign Up / Register
 apiRouter.post('/auth/register', (req: Request, res: Response) => {
   const { email, displayName } = req.body;
-  if (!email) {
-    return res.status(400).json({ error: 'Email is required' });
+  if (!email || !email.includes('@')) {
+    return res.status(400).json({ error: 'A valid email is required' });
   }
 
   const profile = registerUser(email, displayName);
   const token = createToken(profile.uid, profile.email, profile.displayName);
+
   res.json({
-    token,
     user: profile,
+    token,
   });
 });
 
-// Current user profile
+// Get Current User Profile
 apiRouter.get('/auth/me', verifyAuthToken, (req: AuthenticatedRequest, res: Response) => {
   const profile = getUserProfile(req.user!.uid);
-  res.json({ user: profile || req.user });
+  if (!profile) {
+    return res.status(404).json({ error: 'User profile not found' });
+  }
+  res.json({ user: profile });
 });
 
 // ----------------------------------------------------
-// Chat & Session Routes (Server-Side Gemini Integration)
+// Chat & Session Routes (Server-Side Gemini Integration with Memory Consent)
 // ----------------------------------------------------
 
-// Send message in an ongoing session
+// Send message in an ongoing session (injects ONLY user-consented memories)
 apiRouter.post('/session/message', verifyAuthToken, async (req: AuthenticatedRequest, res: Response) => {
   const { message, conversationHistory } = req.body;
   if (!message || typeof message !== 'string') {
     return res.status(400).json({ error: 'Message text is required' });
   }
 
+  const uid = req.user!.uid;
   const history: ChatMessage[] = Array.isArray(conversationHistory) ? conversationHistory : [];
+
+  // Memory Consent Ledger: Retrieve strictly consented memories
+  const activeMemories = getActiveMemoriesForPrompt(uid);
+
   try {
-    const reply = await generateChatReply(history, message);
+    const reply = await generateChatReply(history, message, activeMemories);
     const turnCount = history.filter((m) => m.role === 'user').length + 1;
     res.json({
       reply,
       turnCount,
+      activeMemoriesCount: activeMemories.length,
     });
   } catch (error) {
     console.error('API Error in /session/message:', error);
@@ -154,18 +188,28 @@ apiRouter.post('/session/message', verifyAuthToken, async (req: AuthenticatedReq
   }
 });
 
-// End session: triggers summarization and saves to Firestore isolated path
+// End session: triggers summarization and saves to Firestore isolated path with SHA-256 block receipt
 apiRouter.post('/session/end', verifyAuthToken, async (req: AuthenticatedRequest, res: Response) => {
-  const { conversationHistory, customNotes } = req.body;
+  const { conversationHistory, customNotes, isTimeCapsule, unlockDate, encryptedPayload, timeCapsuleIv } = req.body;
   const history: ChatMessage[] = Array.isArray(conversationHistory) ? conversationHistory : [];
 
-  if (history.length === 0) {
+  if (history.length === 0 && !encryptedPayload) {
     return res.status(400).json({ error: 'Cannot summarize an empty session.' });
   }
 
   try {
-    const summaryData = await summarizeSession(history);
     const uid = req.user!.uid; // Always extracted from verified token, never from body
+
+    let summaryData = {
+      summary: customNotes || 'Reflective journaling conversation.',
+      mood: 'reflective',
+      themes: ['reflection', 'journal'],
+      keyTakeaway: 'Personal growth unfolds through conscious reflection.',
+    };
+
+    if (history.length > 0) {
+      summaryData = await summarizeSession(history);
+    }
 
     const entryToSave = {
       summary: customNotes || summaryData.summary,
@@ -174,6 +218,12 @@ apiRouter.post('/session/end', verifyAuthToken, async (req: AuthenticatedRequest
       keyTakeaway: summaryData.keyTakeaway,
       turnCount: history.filter((m) => m.role === 'user').length,
       messages: history,
+      isTimeCapsule: Boolean(isTimeCapsule),
+      unlockDate,
+      encryptedPayload,
+      timeCapsuleIv,
+      isUnlocked: !isTimeCapsule,
+      memoryConsent: isTimeCapsule ? false : true, // Time capsules excluded from AI memory until opened
     };
 
     const saveResult = saveUserEntry(uid, entryToSave);
@@ -230,7 +280,141 @@ apiRouter.delete('/account', verifyAuthToken, (req: AuthenticatedRequest, res: R
 });
 
 // ----------------------------------------------------
-// Original Feature Enhancement: Private Mood & Theme Insights
+// Feature 1: Tamper-Evident Hash Chain Endpoints
+// ----------------------------------------------------
+
+// Verify full hash chain integrity
+apiRouter.get('/chain/verify', verifyAuthToken, (req: AuthenticatedRequest, res: Response) => {
+  const uid = req.user!.uid;
+  const verification = verifyUserLedger(uid);
+  res.json(verification);
+});
+
+// Simulate unauthorized tampering attempt for interactive demo
+apiRouter.post('/chain/tamper', verifyAuthToken, (req: AuthenticatedRequest, res: Response) => {
+  const uid = req.user!.uid;
+  const { targetEntryId } = req.body;
+  try {
+    const result = simulateTamperAttempt(uid, targetEntryId);
+    res.json(result);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Restore uncorrupted state after demo
+apiRouter.post('/chain/restore', verifyAuthToken, (req: AuthenticatedRequest, res: Response) => {
+  const uid = req.user!.uid;
+  try {
+    const result = restoreLedgerIntegrity(uid);
+    res.json(result);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// ----------------------------------------------------
+// Feature 2: Idea Lineage Tracking
+// ----------------------------------------------------
+
+// Retrieve user's living idea threads
+apiRouter.get('/lineage/threads', verifyAuthToken, (req: AuthenticatedRequest, res: Response) => {
+  const uid = req.user!.uid;
+  const threads = getUserLineageThreads(uid);
+  res.json({ threads });
+});
+
+// Query a dynamic idea evolution trace across historical sessions
+apiRouter.post('/lineage/trace', verifyAuthToken, async (req: AuthenticatedRequest, res: Response) => {
+  const uid = req.user!.uid;
+  const { queryTopic } = req.body;
+  if (!queryTopic) {
+    return res.status(400).json({ error: 'queryTopic is required' });
+  }
+
+  const entriesResult = getUserEntries(uid);
+  const entries = entriesResult.entries || [];
+
+  try {
+    const trace = await traceIdeaSemanticEvolution(entries, queryTopic);
+    res.json({ trace });
+  } catch (err: any) {
+    console.error('Lineage trace error:', err);
+    res.status(500).json({ error: 'Failed to trace idea lineage.' });
+  }
+});
+
+// ----------------------------------------------------
+// Feature 3: Memory Consent Ledger Endpoints
+// ----------------------------------------------------
+
+// Get transparent memory consent ledger
+apiRouter.get('/memory/consent', verifyAuthToken, (req: AuthenticatedRequest, res: Response) => {
+  const uid = req.user!.uid;
+  const ledger = getMemoryConsentLedger(uid);
+  res.json(ledger);
+});
+
+// Toggle memory consent for specific entry
+apiRouter.post('/memory/consent/toggle', verifyAuthToken, (req: AuthenticatedRequest, res: Response) => {
+  const uid = req.user!.uid;
+  const { entryId, consented } = req.body;
+  if (!entryId || typeof consented !== 'boolean') {
+    return res.status(400).json({ error: 'entryId and boolean consented are required' });
+  }
+
+  try {
+    const result = toggleEntryMemoryConsent(uid, entryId, consented);
+    res.json(result);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// ----------------------------------------------------
+// Feature 4: Time-Locked Capsule Vault Endpoints
+// ----------------------------------------------------
+
+// Seal decryption key with target unlock timestamp
+apiRouter.post('/timecapsule/seal', verifyAuthToken, (req: AuthenticatedRequest, res: Response) => {
+  const uid = req.user!.uid;
+  const { entryId, unlockDate, key } = req.body;
+  if (!entryId || !unlockDate || !key) {
+    return res.status(400).json({ error: 'entryId, unlockDate, and key are required' });
+  }
+
+  const result = sealTimeCapsuleKey(uid, entryId, unlockDate, key);
+  res.json(result);
+});
+
+// Attempt unlock: verifies server-side clock
+apiRouter.post('/timecapsule/unlock', verifyAuthToken, (req: AuthenticatedRequest, res: Response) => {
+  const uid = req.user!.uid;
+  const { entryId, fastForwardDemo } = req.body;
+  if (!entryId) {
+    return res.status(400).json({ error: 'entryId is required' });
+  }
+
+  const result = unlockTimeCapsuleKey(uid, entryId, Boolean(fastForwardDemo));
+  if (!result.allowed) {
+    return res.status(423).json(result); // 423 Locked
+  }
+
+  res.json(result);
+});
+
+// ----------------------------------------------------
+// Feature 5: Emotional Weather Forecast Endpoint
+// ----------------------------------------------------
+
+apiRouter.get('/forecast/emotional-weather', verifyAuthToken, (req: AuthenticatedRequest, res: Response) => {
+  const uid = req.user!.uid;
+  const forecast = getEmotionalWeatherForecast(uid);
+  res.json(forecast);
+});
+
+// ----------------------------------------------------
+// Mood & Theme Insights
 // ----------------------------------------------------
 
 apiRouter.get('/insights', verifyAuthToken, (req: AuthenticatedRequest, res: Response) => {
@@ -266,7 +450,6 @@ apiRouter.get('/insights', verifyAuthToken, (req: AuthenticatedRequest, res: Res
         themeCounts[t] = (themeCounts[t] || 0) + 1;
       });
 
-      // Score mood 1-5 for visual trend charting
       const moodScores: Record<string, number> = {
         stressed: 1,
         overwhelmed: 1.5,
@@ -289,12 +472,10 @@ apiRouter.get('/insights', verifyAuthToken, (req: AuthenticatedRequest, res: Res
       };
     });
 
-  // Top themes sorted by count
   const themeFrequency = Object.entries(themeCounts)
     .map(([theme, count]) => ({ theme, count }))
     .sort((a, b) => b.count - a.count);
 
-  // Dominant mood
   let dominantMood = 'reflective';
   let maxCount = 0;
   for (const [m, count] of Object.entries(moodDistribution)) {
@@ -307,7 +488,6 @@ apiRouter.get('/insights', verifyAuthToken, (req: AuthenticatedRequest, res: Res
   const totalTurns = entries.reduce((acc, e) => acc + (e.turnCount || 0), 0);
   const averageTurns = Math.round((totalTurns / entries.length) * 10) / 10;
 
-  // Streak calculation (days with entries)
   const uniqueDays = new Set(entries.map((e) => new Date(e.createdAt).toDateString()));
   const reflectionStreakDays = uniqueDays.size;
 
@@ -336,7 +516,6 @@ apiRouter.get('/insights', verifyAuthToken, (req: AuthenticatedRequest, res: Res
 // Security & Compliance Verification Routes
 // ----------------------------------------------------
 
-// Live Cross-Account Isolation Test (TC-7 & TC-8 demonstration)
 apiRouter.post('/security/test-isolation', verifyAuthToken, (req: AuthenticatedRequest, res: Response) => {
   const callerUid = req.user!.uid;
   const { attackType, targetUid } = req.body;
@@ -344,7 +523,6 @@ apiRouter.post('/security/test-isolation', verifyAuthToken, (req: AuthenticatedR
   const target = targetUid || (callerUid === 'usr_rae_8921' ? 'usr_ben_4419' : 'usr_rae_8921');
 
   if (attackType === 'cross_read') {
-    // Attempt to read target user's entries using caller's authenticated token
     const testResult = getUserEntries(callerUid, target);
     return res.json({
       testCase: 'TC-7: Cross-User Read Access Attempt',
@@ -359,7 +537,6 @@ apiRouter.post('/security/test-isolation', verifyAuthToken, (req: AuthenticatedR
   }
 
   if (attackType === 'cross_write') {
-    // Attempt to write an entry directly into target's path
     const testResult = saveUserEntry(
       callerUid,
       {
@@ -384,7 +561,6 @@ apiRouter.post('/security/test-isolation', verifyAuthToken, (req: AuthenticatedR
   }
 
   if (attackType === 'key_leak_check') {
-    // Inspect headers and verify server-side secret isolation
     return res.json({
       testCase: 'TC-9: Client Bundle & Network Key Exposure Check',
       callerUid,
@@ -420,7 +596,7 @@ apiRouter.get('/security/posture', verifyAuthToken, (req: AuthenticatedRequest, 
     threatModel: {
       stride: [
         { threat: 'Spoofing', mitigation: 'Server-verified token identity; UID never accepted from client body' },
-        { threat: 'Tampering', mitigation: 'UID derived from verified token; per-path Security Rules reject mismatch' },
+        { threat: 'Tampering', mitigation: 'SHA-256 block receipts & cryptographic hash chaining across all entries' },
         { threat: 'Repudiation', mitigation: 'Server-side immutable timestamps and append-only audit trail' },
         { threat: 'Information Disclosure', mitigation: 'Deny-by-default rules; Gemini API key never transmitted to client' },
         { threat: 'Denial of Service', mitigation: 'Session validation, payload size constraints, server-side throttling' },

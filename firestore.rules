@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // User Profile Document
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isOwner(userId);
+      allow delete: if isOwner(userId);
+
+      // Private Journal Entries Subcollection
+      match /entries/{entryId} {
+        // Enforce strict owner-only access: no cross-account read, write, or delete
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) 
+          && request.resource.data.uid == userId
+          && request.resource.data.summary is string
+          && request.resource.data.mood is string;
+        allow update: if isOwner(userId)
+          && request.resource.data.uid == userId;
+        allow delete: if isOwner(userId);
+      }
+    }
+
+    // Deny all other unmatched paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

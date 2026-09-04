@@ -1,4 +1,14 @@
-import { UserProfile, JournalEntry, InsightsData, SecurityPosture, ChatMessage } from './types';
+import {
+  UserProfile,
+  JournalEntry,
+  InsightsData,
+  SecurityPosture,
+  ChatMessage,
+  HashChainVerificationResult,
+  IdeaLineageThread,
+  MemoryConsentItem,
+  EmotionalWeatherForecast,
+} from './types';
 
 const TOKEN_KEY = 'pgj_session_token';
 const USER_KEY = 'pgj_current_user';
@@ -40,9 +50,26 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     headers,
   });
 
-  const data = await response.json().catch(() => ({}));
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    const text = await response.text().catch(() => '');
+    throw new Error(
+      `Invalid server response format (${contentType || 'empty'}). Expected application/json. Status: ${response.status}`
+    );
+  }
+
+  let data: any;
+  try {
+    data = await response.json();
+  } catch (err: any) {
+    throw new Error(`Failed to parse JSON response: ${err?.message || 'unknown error'}`);
+  }
+
   if (!response.ok) {
-    throw new Error(data.error || `HTTP error ${response.status}`);
+    const errorObj: any = new Error(data?.error || `HTTP error ${response.status}`);
+    errorObj.status = response.status;
+    errorObj.data = data;
+    throw errorObj;
   }
 
   return data as T;
@@ -53,10 +80,15 @@ export async function getPersonas(): Promise<{ personas: UserProfile[] }> {
   return request<{ personas: UserProfile[] }>('/api/auth/personas');
 }
 
-export async function login(uid?: string, email?: string): Promise<{ token: string; user: UserProfile }> {
+export async function login(
+  uid?: string,
+  email?: string,
+  displayName?: string,
+  authProvider?: string
+): Promise<{ token: string; user: UserProfile }> {
   const res = await request<{ token: string; user: UserProfile }>('/api/auth/login', {
     method: 'POST',
-    body: JSON.stringify({ uid, email }),
+    body: JSON.stringify({ uid, email, displayName, authProvider }),
   });
   setStoredSession(res.token, res.user);
   return res;
@@ -75,8 +107,8 @@ export async function register(email: string, displayName: string): Promise<{ to
 export async function sendChatMessage(
   message: string,
   conversationHistory: ChatMessage[]
-): Promise<{ reply: string; turnCount: number }> {
-  return request<{ reply: string; turnCount: number }>('/api/session/message', {
+): Promise<{ reply: string; turnCount: number; activeMemoriesCount?: number }> {
+  return request<{ reply: string; turnCount: number; activeMemoriesCount?: number }>('/api/session/message', {
     method: 'POST',
     body: JSON.stringify({ message, conversationHistory }),
   });
@@ -84,11 +116,21 @@ export async function sendChatMessage(
 
 export async function endSessionAndSummarize(
   conversationHistory: ChatMessage[],
-  customNotes?: string
+  customNotes?: string,
+  capsuleOptions?: {
+    isTimeCapsule?: boolean;
+    unlockDate?: string;
+    encryptedPayload?: string;
+    timeCapsuleIv?: string;
+  }
 ): Promise<{ entry: JournalEntry; rawSummary: any }> {
   return request<{ entry: JournalEntry; rawSummary: any }>('/api/session/end', {
     method: 'POST',
-    body: JSON.stringify({ conversationHistory, customNotes }),
+    body: JSON.stringify({
+      conversationHistory,
+      customNotes,
+      ...capsuleOptions,
+    }),
   });
 }
 
@@ -129,4 +171,159 @@ export async function testSecurityIsolation(
 
 export async function getSecurityPosture(): Promise<SecurityPosture> {
   return request<SecurityPosture>('/api/security/posture');
+}
+
+// ----------------------------------------------------
+// Feature 1: Tamper-Evident Hash Chain
+// ----------------------------------------------------
+
+export async function verifyLedgerChain(): Promise<HashChainVerificationResult> {
+  return request<HashChainVerificationResult>('/api/chain/verify');
+}
+
+export async function simulateTamperAttempt(targetEntryId?: string): Promise<{
+  success: boolean;
+  tamperedEntryId: string;
+  verification: HashChainVerificationResult;
+}> {
+  return request<{
+    success: boolean;
+    tamperedEntryId: string;
+    verification: HashChainVerificationResult;
+  }>('/api/chain/tamper', {
+    method: 'POST',
+    body: JSON.stringify({ targetEntryId }),
+  });
+}
+
+export async function restoreLedgerIntegrity(): Promise<{
+  success: boolean;
+  verification: HashChainVerificationResult;
+}> {
+  return request<{
+    success: boolean;
+    verification: HashChainVerificationResult;
+  }>('/api/chain/restore', {
+    method: 'POST',
+  });
+}
+
+// ----------------------------------------------------
+// Feature 2: Idea Lineage Living Threads
+// ----------------------------------------------------
+
+export async function getIdeaLineageThreads(): Promise<{ threads: IdeaLineageThread[] }> {
+  return request<{ threads: IdeaLineageThread[] }>('/api/lineage/threads');
+}
+
+export async function traceIdeaLineage(queryTopic: string): Promise<{
+  trace: {
+    title: string;
+    summaryNarrative: string;
+    stages: Array<{
+      date: string;
+      stage: string;
+      milestone: string;
+      shift: string;
+    }>;
+    synthesis: string;
+  };
+}> {
+  return request<{
+    trace: {
+      title: string;
+      summaryNarrative: string;
+      stages: Array<{
+        date: string;
+        stage: string;
+        milestone: string;
+        shift: string;
+      }>;
+      synthesis: string;
+    };
+  }>('/api/lineage/trace', {
+    method: 'POST',
+    body: JSON.stringify({ queryTopic }),
+  });
+}
+
+// ----------------------------------------------------
+// Feature 3: Memory Consent Ledger
+// ----------------------------------------------------
+
+export async function getMemoryConsentLedger(): Promise<{
+  items: MemoryConsentItem[];
+  totalActiveMemories: number;
+  totalTokensInjected: number;
+}> {
+  return request<{
+    items: MemoryConsentItem[];
+    totalActiveMemories: number;
+    totalTokensInjected: number;
+  }>('/api/memory/consent');
+}
+
+export async function toggleMemoryConsent(
+  entryId: string,
+  consented: boolean
+): Promise<{ success: boolean; entryId: string; isConsented: boolean }> {
+  return request<{ success: boolean; entryId: string; isConsented: boolean }>(
+    '/api/memory/consent/toggle',
+    {
+      method: 'POST',
+      body: JSON.stringify({ entryId, consented }),
+    }
+  );
+}
+
+// ----------------------------------------------------
+// Feature 4: Time-Locked Capsule Entries
+// ----------------------------------------------------
+
+export async function sealTimeCapsuleKey(
+  entryId: string,
+  unlockDate: string,
+  key: string
+): Promise<{ success: boolean; sealedAt: string; unlockDate: string }> {
+  return request<{ success: boolean; sealedAt: string; unlockDate: string }>(
+    '/api/timecapsule/seal',
+    {
+      method: 'POST',
+      body: JSON.stringify({ entryId, unlockDate, key }),
+    }
+  );
+}
+
+export async function unlockTimeCapsuleKey(
+  entryId: string,
+  fastForwardDemo?: boolean
+): Promise<{
+  allowed: boolean;
+  key?: string;
+  isUnlocked: boolean;
+  timeRemainingMs: number;
+  unlockDate: string;
+  serverTime: string;
+  error?: string;
+}> {
+  return request<{
+    allowed: boolean;
+    key?: string;
+    isUnlocked: boolean;
+    timeRemainingMs: number;
+    unlockDate: string;
+    serverTime: string;
+    error?: string;
+  }>('/api/timecapsule/unlock', {
+    method: 'POST',
+    body: JSON.stringify({ entryId, fastForwardDemo }),
+  });
+}
+
+// ----------------------------------------------------
+// Feature 5: Emotional Weather Forecast
+// ----------------------------------------------------
+
+export async function getEmotionalWeatherForecast(): Promise<EmotionalWeatherForecast> {
+  return request<EmotionalWeatherForecast>('/api/forecast/emotional-weather');
 }

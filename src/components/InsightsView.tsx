@@ -1,6 +1,8 @@
 import React from 'react';
-import { InsightsData } from '../types';
+import { InsightsData, JournalEntry } from '../types';
 import { getMoodDetails } from '../utils/theme';
+import { MoodCalendar } from './MoodCalendar';
+import { useTheme } from '../utils/themeContext';
 import {
   LineChart,
   Line,
@@ -28,16 +30,21 @@ import {
 
 interface InsightsViewProps {
   insights: InsightsData | null;
+  entries?: JournalEntry[];
   onStartNewSession: () => void;
   isLoading: boolean;
 }
 
 export const InsightsView: React.FC<InsightsViewProps> = ({
   insights,
+  entries = [],
   onStartNewSession,
   isLoading,
 }) => {
+  const { isDark } = useTheme();
+
   if (isLoading) {
+
     return (
       <div className="max-w-5xl mx-auto px-4 py-16 text-center text-[#1A1A1A]/60 font-serif italic text-sm">
         <Sparkles className="w-6 h-6 text-[#8C271E] animate-spin mx-auto mb-3" />
@@ -110,7 +117,7 @@ export const InsightsView: React.FC<InsightsViewProps> = ({
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-8 text-[#1A1A1A]">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-4 pb-6 border-b border-[#1A1A1A]/15">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-[#1A1A1A]/15">
         <div>
           <div className="text-[10px] uppercase tracking-[0.3em] font-bold text-[#1A1A1A]/50 mb-1">
             Analytical Folio • Section III
@@ -123,7 +130,7 @@ export const InsightsView: React.FC<InsightsViewProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center space-x-2 bg-white border border-[#1A1A1A]/20 text-[#1A1A1A] px-3 py-1.5 text-xs shadow-2xs">
+        <div className="flex items-center gap-2 bg-white border border-[#1A1A1A]/20 text-[#1A1A1A] px-3 py-1.5 text-xs shadow-2xs shrink-0 self-start sm:self-auto">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
           <span className="font-mono text-[10px] uppercase tracking-wider">Zero Cross-Tenant Pooling</span>
         </div>
@@ -131,65 +138,75 @@ export const InsightsView: React.FC<InsightsViewProps> = ({
 
       {/* KPI Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-5 border border-[#1A1A1A]/15 shadow-2xs">
-          <div className="flex items-center justify-between text-[#1A1A1A]/60 mb-2">
-            <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Total Entries</span>
-            <Calendar className="w-3.5 h-3.5 text-[#1A1A1A]/40" />
+        <div className="bg-white p-5 border border-[#1A1A1A]/15 shadow-2xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between text-[#1A1A1A]/60 mb-2">
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Total Entries</span>
+              <Calendar className="w-3.5 h-3.5 text-[#1A1A1A]/40 shrink-0" />
+            </div>
+            <div className="h-9 flex items-baseline text-3xl font-serif font-bold text-[#1A1A1A]">
+              {insights.totalEntries}
+            </div>
           </div>
-          <div className="text-3xl font-serif font-bold text-[#1A1A1A]">{insights.totalEntries}</div>
-          <p className="text-[10px] font-mono text-[#1A1A1A]/50 mt-1">Archived reflections</p>
+          <p className="text-[10px] font-mono text-[#1A1A1A]/50 mt-2">Archived reflections</p>
         </div>
 
-        <div className="bg-white p-5 border border-[#1A1A1A]/15 shadow-2xs">
-          <div className="flex items-center justify-between text-[#1A1A1A]/60 mb-2">
-            <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Consistency</span>
-            <Flame className="w-3.5 h-3.5 text-[#8C271E]" />
+        <div className="bg-white p-5 border border-[#1A1A1A]/15 shadow-2xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between text-[#1A1A1A]/60 mb-2">
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Consistency</span>
+              <Flame className="w-3.5 h-3.5 text-[#8C271E] shrink-0" />
+            </div>
+            <div className="h-9 flex items-baseline text-3xl font-serif font-bold text-[#1A1A1A]">
+              {insights.reflectionStreakDays}{' '}
+              <span className="text-xs font-serif font-normal text-[#1A1A1A]/60 italic ml-1.5">days</span>
+            </div>
           </div>
-          <div className="text-3xl font-serif font-bold text-[#1A1A1A]">
-            {insights.reflectionStreakDays}{' '}
-            <span className="text-xs font-serif font-normal text-[#1A1A1A]/60 italic">days</span>
-          </div>
-          <p className="text-[10px] font-mono text-[#1A1A1A]/50 mt-1">Check-in cadence</p>
+          <p className="text-[10px] font-mono text-[#1A1A1A]/50 mt-2">Check-in cadence</p>
         </div>
 
-        <div className="bg-white p-5 border border-[#1A1A1A]/15 shadow-2xs">
-          <div className="flex items-center justify-between text-[#1A1A1A]/60 mb-2">
-            <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Primary Tone</span>
-            <Activity className="w-3.5 h-3.5 text-[#1A1A1A]/40" />
-          </div>
-          <div className="flex items-center space-x-2 mt-1">
-            <span
-              className={`inline-flex items-center px-2 py-0.5 text-xs font-bold uppercase tracking-wider border capitalize ${dominantMoodDetails.badgeClass}`}
-            >
+        <div className="bg-white p-5 border border-[#1A1A1A]/15 shadow-2xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between text-[#1A1A1A]/60 mb-2">
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Primary Tone</span>
+              <Activity className="w-3.5 h-3.5 text-[#1A1A1A]/40 shrink-0" />
+            </div>
+            <div className="h-9 flex items-center">
               <span
-                className="w-1.5 h-1.5 rounded-full mr-1.5"
-                style={{ backgroundColor: dominantMoodDetails.dotColor }}
-              ></span>
-              {insights.dominantMood}
-            </span>
+                className={`inline-flex items-center px-2.5 py-1 text-xs font-bold uppercase tracking-wider border capitalize ${dominantMoodDetails.badgeClass}`}
+              >
+                <span
+                  className="w-1.5 h-1.5 rounded-full mr-1.5"
+                  style={{ backgroundColor: dominantMoodDetails.dotColor }}
+                ></span>
+                {insights.dominantMood}
+              </span>
+            </div>
           </div>
           <p className="text-[10px] font-mono text-[#1A1A1A]/50 mt-2">Modal emotional baseline</p>
         </div>
 
-        <div className="bg-white p-5 border border-[#1A1A1A]/15 shadow-2xs">
-          <div className="flex items-center justify-between text-[#1A1A1A]/60 mb-2">
-            <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Dialogue Depth</span>
-            <MessageCircle className="w-3.5 h-3.5 text-[#1A1A1A]/40" />
+        <div className="bg-white p-5 border border-[#1A1A1A]/15 shadow-2xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between text-[#1A1A1A]/60 mb-2">
+              <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Dialogue Depth</span>
+              <MessageCircle className="w-3.5 h-3.5 text-[#1A1A1A]/40 shrink-0" />
+            </div>
+            <div className="h-9 flex items-baseline text-3xl font-serif font-bold text-[#1A1A1A]">
+              {insights.averageTurns}{' '}
+              <span className="text-xs font-serif font-normal text-[#1A1A1A]/60 italic ml-1.5">turns/avg</span>
+            </div>
           </div>
-          <div className="text-3xl font-serif font-bold text-[#1A1A1A]">
-            {insights.averageTurns}{' '}
-            <span className="text-xs font-serif font-normal text-[#1A1A1A]/60 italic">turns/avg</span>
-          </div>
-          <p className="text-[10px] font-mono text-[#1A1A1A]/50 mt-1">{insights.totalTurns} total exchanges</p>
+          <p className="text-[10px] font-mono text-[#1A1A1A]/50 mt-2">{insights.totalTurns} total exchanges</p>
         </div>
       </div>
 
       {/* Longitudinal Insight Synthesis */}
-      <div className="bg-[#F2EFE9] p-6 border-l-2 border-[#1A1A1A] border-y border-r border-[#1A1A1A]/15 flex items-start space-x-4">
-        <div className="w-8 h-8 border border-[#1A1A1A] bg-[#1A1A1A] text-white flex items-center justify-center shrink-0 font-serif text-sm">
+      <div className="bg-[#F2EFE9] p-6 border-l-2 border-[#1A1A1A] border-y border-r border-[#1A1A1A]/15 flex items-start gap-4">
+        <div className="w-8 h-8 border border-[#1A1A1A] bg-[#1A1A1A] text-white flex items-center justify-center shrink-0 font-serif text-sm select-none">
           ¶
         </div>
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <h3 className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#1A1A1A]/60">
             Editorial Marginalia • Longitudinal Synthesis
           </h3>
@@ -199,39 +216,42 @@ export const InsightsView: React.FC<InsightsViewProps> = ({
         </div>
       </div>
 
+      {/* Monthly Cadence & Mood Almanac Calendar */}
+      <MoodCalendar entries={entries} />
+
       {/* Mood Over Time Area / Line Chart */}
       <div className="bg-white p-6 border border-[#1A1A1A]/15 shadow-2xs">
-        <div className="flex items-center justify-between mb-4 pb-3 border-b border-[#1A1A1A]/10">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-3 border-b border-[#1A1A1A]/10">
           <div>
             <h3 className="text-xs font-bold text-[#1A1A1A] uppercase tracking-[0.2em]">
               Emotional Cadence Over Time
             </h3>
-            <p className="text-xs font-serif italic text-[#1A1A1A]/60">
+            <p className="text-xs font-serif italic text-[#1A1A1A]/60 mt-0.5">
               Trajectory plotted across chronological journal sessions
             </p>
           </div>
-          <div className="text-[10px] font-mono text-[#1A1A1A]/60 bg-[#F9F8F6] px-2.5 py-1 border border-[#1A1A1A]/15">
+          <div className="text-[10px] font-mono text-[#1A1A1A]/60 bg-[#F9F8F6] px-2.5 py-1 border border-[#1A1A1A]/15 shrink-0 self-start sm:self-auto">
             Index: 1 (Stressed) → 5 (Serene)
           </div>
         </div>
 
         <div className="h-64 w-full pt-2">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={insights.timeline} margin={{ top: 10, right: 20, left: -20, bottom: 0 }}>
+            <AreaChart data={insights.timeline || []} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
               <defs>
                 <linearGradient id="editorialMoodGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#1A1A1A" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#1A1A1A" stopOpacity={0.0} />
+                  <stop offset="5%" stopColor={isDark ? '#EDE9DF' : '#1A1A1A'} stopOpacity={isDark ? 0.35 : 0.2} />
+                  <stop offset="95%" stopColor={isDark ? '#EDE9DF' : '#1A1A1A'} stopOpacity={0.0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="2 2" vertical={false} stroke="#E5E5E0" />
-              <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#666', fontFamily: 'monospace' }} />
-              <YAxis domain={[0.5, 5.5]} ticks={[1, 2, 3, 4, 5]} tick={{ fontSize: 10, fill: '#666', fontFamily: 'monospace' }} />
+              <CartesianGrid strokeDasharray="2 2" vertical={false} stroke={isDark ? 'rgba(237, 233, 224, 0.12)' : '#E5E5E0'} />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: isDark ? '#A09C92' : '#666', fontFamily: 'monospace' }} />
+              <YAxis domain={[0.5, 5.5]} ticks={[1, 2, 3, 4, 5]} tick={{ fontSize: 10, fill: isDark ? '#A09C92' : '#666', fontFamily: 'monospace' }} />
               <Tooltip content={<CustomTimelineTooltip />} />
               <Area
                 type="monotone"
                 dataKey="moodScore"
-                stroke="#1A1A1A"
+                stroke={isDark ? '#EDE9DF' : '#1A1A1A'}
                 strokeWidth={2}
                 fillOpacity={1}
                 fill="url(#editorialMoodGradient)"
@@ -256,10 +276,10 @@ export const InsightsView: React.FC<InsightsViewProps> = ({
           </div>
 
           <div className="space-y-3.5">
-            {insights.themeFrequency.length === 0 ? (
+            {!Array.isArray(insights.themeFrequency) || insights.themeFrequency.length === 0 ? (
               <p className="text-xs font-serif italic text-[#1A1A1A]/50">No themes recorded yet.</p>
             ) : (
-              insights.themeFrequency.slice(0, 5).map((item, idx) => {
+              (insights.themeFrequency || []).slice(0, 5).map((item, idx) => {
                 const maxCount = insights.themeFrequency[0]?.count || 1;
                 const percentage = Math.round((item.count / maxCount) * 100);
                 return (
@@ -294,7 +314,7 @@ export const InsightsView: React.FC<InsightsViewProps> = ({
           </div>
 
           <div className="space-y-2.5">
-            {Object.entries(insights.moodDistribution).map(([mood, count], i) => {
+            {Object.entries(insights.moodDistribution || {}).map(([mood, count], i) => {
               const info = getMoodDetails(mood);
               const countNum = Number(count) || 0;
               const percent = Math.round((countNum / insights.totalEntries) * 100);

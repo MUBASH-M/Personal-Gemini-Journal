@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Sparkles, Check, X, Tag, Heart, Bookmark, Edit3, ShieldAlert } from 'lucide-react';
+import { Sparkles, Check, X, Tag, Heart, Bookmark, Edit3, ShieldAlert, BookOpen } from 'lucide-react';
 import { getMoodDetails } from '../utils/theme';
+import { JournalEdition } from '../types';
 
 interface SummaryConfirmModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSaveAndPersist: (customNotes?: string) => Promise<void>;
+  onSaveAndPersist: (customNotes?: string, targetEditionId?: string) => Promise<void>;
   isLoading: boolean;
   summaryData: {
     summary: string;
@@ -13,6 +14,8 @@ interface SummaryConfirmModalProps {
     themes: string[];
     keyTakeaway: string;
   } | null;
+  editions?: JournalEdition[];
+  activeEditionId?: string;
 }
 
 export const SummaryConfirmModal: React.FC<SummaryConfirmModalProps> = ({
@@ -21,16 +24,19 @@ export const SummaryConfirmModal: React.FC<SummaryConfirmModalProps> = ({
   onSaveAndPersist,
   isLoading,
   summaryData,
+  editions = [],
+  activeEditionId,
 }) => {
   const [editedSummary, setEditedSummary] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+  const [selectedEditionId, setSelectedEditionId] = useState(activeEditionId || 'ed_new_05');
 
   if (!isOpen) return null;
 
   const moodInfo = summaryData ? getMoodDetails(summaryData.mood) : getMoodDetails('reflective');
 
   const handleSave = () => {
-    onSaveAndPersist(isEditing ? editedSummary : undefined);
+    onSaveAndPersist(isEditing ? editedSummary : undefined, selectedEditionId);
   };
 
   return (
@@ -52,34 +58,34 @@ export const SummaryConfirmModal: React.FC<SummaryConfirmModalProps> = ({
         ) : summaryData ? (
           <div>
             {/* Header */}
-            <div className="flex items-start justify-between pb-4 border-b border-[#1A1A1A]/15">
-              <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 border border-[#1A1A1A] bg-[#1A1A1A] text-white flex items-center justify-center font-serif text-sm">
+            <div className="flex items-start justify-between gap-3 pb-4 border-b border-[#1A1A1A]/15">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-8 h-8 border border-[#1A1A1A] bg-[#1A1A1A] text-white flex items-center justify-center font-serif text-sm shrink-0 select-none">
                   ¶
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="text-[10px] uppercase tracking-[0.25em] font-bold text-[#1A1A1A]/60">
                     Galley Proof • Synthesis
                   </div>
-                  <h3 className="text-xl font-serif font-bold text-[#1A1A1A]">Archival Entry Record</h3>
+                  <h3 className="text-xl font-serif font-bold text-[#1A1A1A] truncate">Archival Entry Record</h3>
                 </div>
               </div>
               <button
                 onClick={onClose}
-                className="text-[#1A1A1A]/60 hover:text-[#1A1A1A] p-1.5 border border-transparent hover:border-[#1A1A1A]/20 transition-colors"
+                className="h-8 w-8 flex items-center justify-center text-[#1A1A1A]/60 hover:text-[#1A1A1A] border border-transparent hover:border-[#1A1A1A]/20 transition-colors shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Derived Mood & Themes Chips */}
-            <div className="mt-5 flex flex-wrap items-center gap-2">
-              <div className="flex items-center space-x-1.5 text-[10px] text-[#1A1A1A]/70 font-bold uppercase tracking-[0.15em]">
-                <Heart className="w-3 h-3 text-[#8C271E]" />
+            <div className="mt-5 flex flex-wrap items-center gap-2 sm:gap-3">
+              <div className="flex items-center gap-1.5 text-[10px] text-[#1A1A1A]/70 font-bold uppercase tracking-[0.15em] shrink-0">
+                <Heart className="w-3 h-3 text-[#8C271E] shrink-0" />
                 <span>Tone:</span>
               </div>
               <span
-                className={`inline-flex items-center px-2.5 py-0.5 text-xs font-bold border ${moodInfo.badgeClass}`}
+                className={`inline-flex items-center px-2.5 py-0.5 text-xs font-bold border shrink-0 ${moodInfo.badgeClass}`}
               >
                 <span
                   className="w-2 h-2 rounded-full mr-1.5"
@@ -88,18 +94,20 @@ export const SummaryConfirmModal: React.FC<SummaryConfirmModalProps> = ({
                 {moodInfo.label}
               </span>
 
-              <div className="flex items-center space-x-1.5 text-[10px] text-[#1A1A1A]/70 ml-3 mr-1 font-bold uppercase tracking-[0.15em]">
-                <Tag className="w-3 h-3 text-[#1A1A1A]" />
+              <div className="flex items-center gap-1.5 text-[10px] text-[#1A1A1A]/70 font-bold uppercase tracking-[0.15em] shrink-0 sm:ml-2">
+                <Tag className="w-3 h-3 text-[#1A1A1A] shrink-0" />
                 <span>Index Tags:</span>
               </div>
-              {summaryData.themes.map((theme, i) => (
-                <span
-                  key={i}
-                  className="inline-flex items-center px-2 py-0.5 text-[11px] font-mono bg-white text-[#1A1A1A] border border-[#1A1A1A]/15"
-                >
-                  #{theme}
-                </span>
-              ))}
+              <div className="flex flex-wrap items-center gap-1.5">
+                {summaryData.themes.map((theme, i) => (
+                  <span
+                    key={i}
+                    className="inline-flex items-center px-2 py-0.5 text-[11px] font-mono bg-white text-[#1A1A1A] border border-[#1A1A1A]/15"
+                  >
+                    #{theme}
+                  </span>
+                ))}
+              </div>
             </div>
 
             {/* Summary Body */}
@@ -113,10 +121,10 @@ export const SummaryConfirmModal: React.FC<SummaryConfirmModalProps> = ({
                     if (!isEditing) setEditedSummary(summaryData.summary);
                     setIsEditing(!isEditing);
                   }}
-                  className="text-xs text-[#1A1A1A] hover:underline flex items-center font-serif italic"
+                  className="text-xs text-[#1A1A1A] hover:underline flex items-center gap-1 font-serif italic"
                 >
-                  <Edit3 className="w-3 h-3 mr-1 text-[#8C271E]" />
-                  {isEditing ? 'Discard edits' : 'Edit text'}
+                  <Edit3 className="w-3 h-3 text-[#8C271E] shrink-0" />
+                  <span>{isEditing ? 'Discard edits' : 'Edit text'}</span>
                 </button>
               </div>
 
@@ -146,28 +154,50 @@ export const SummaryConfirmModal: React.FC<SummaryConfirmModalProps> = ({
               </div>
             )}
 
+            {/* Folio Edition Destination */}
+            <div className="mt-4 p-3 bg-white border border-[#1A1A1A]/15 flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <BookOpen className="w-3.5 h-3.5 text-[#8C271E]" />
+                <span className="text-[10px] uppercase tracking-wider font-bold text-[#1A1A1A]/70 font-mono">
+                  Publish to Edition:
+                </span>
+              </div>
+              <select
+                id="summary-edition-select"
+                value={selectedEditionId}
+                onChange={(e) => setSelectedEditionId(e.target.value)}
+                className="px-2.5 py-1 text-xs font-serif font-bold bg-[#F9F8F6] border border-[#1A1A1A]/20 text-[#1A1A1A] focus:outline-none focus:border-[#8C271E]"
+              >
+                {editions.map((ed) => (
+                  <option key={ed.id} value={ed.id}>
+                    {ed.issueNumber} • {ed.title} {ed.isNewEdition ? '(New Edition)' : '(Archival)'}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             {/* Storage Colophon Notice */}
-            <div className="mt-5 text-[10px] text-[#1A1A1A]/60 bg-white p-2.5 border border-[#1A1A1A]/10 flex items-center space-x-2 font-mono">
-              <span className="uppercase font-bold text-[#1A1A1A] bg-[#F2EFE9] px-1.5 py-0.5 border border-[#1A1A1A]/20">
+            <div className="mt-5 text-[10px] text-[#1A1A1A]/60 bg-white p-2.5 border border-[#1A1A1A]/10 flex flex-col sm:flex-row sm:items-center gap-2 font-mono">
+              <span className="uppercase font-bold text-[#1A1A1A] bg-[#F2EFE9] px-1.5 py-0.5 border border-[#1A1A1A]/20 shrink-0 self-start sm:self-auto">
                 PER-USER VAULT
               </span>
-              <span>Encrypted deposit to /users/{'{uid}'}/entries with zero cross-tenant leakage.</span>
+              <span className="truncate">Encrypted deposit to /users/{'{uid}'}/entries with zero cross-tenant leakage.</span>
             </div>
 
             {/* Modal Actions */}
-            <div className="mt-6 flex items-center justify-end space-x-3 pt-4 border-t border-[#1A1A1A]/15">
+            <div className="mt-6 flex flex-col-reverse sm:flex-row sm:items-center justify-end gap-2.5 pt-4 border-t border-[#1A1A1A]/15">
               <button
                 onClick={onClose}
-                className="px-4 py-2 text-xs uppercase tracking-wider font-bold text-[#1A1A1A]/70 hover:text-[#1A1A1A] border border-transparent hover:border-[#1A1A1A]/20 transition-colors"
+                className="h-9 px-4 text-xs uppercase tracking-wider font-bold text-[#1A1A1A]/70 hover:text-[#1A1A1A] border border-transparent hover:border-[#1A1A1A]/20 transition-colors inline-flex items-center justify-center"
               >
                 Return to Transcript
               </button>
               <button
                 id="confirm-save-entry-btn"
                 onClick={handleSave}
-                className="inline-flex items-center space-x-2 px-5 py-2.5 text-xs uppercase tracking-[0.2em] font-bold bg-[#1A1A1A] hover:bg-black text-white border border-[#1A1A1A] transition-all shadow-xs"
+                className="h-9 inline-flex items-center justify-center gap-2 px-5 text-xs uppercase tracking-[0.2em] font-bold bg-[#1A1A1A] hover:bg-black text-white border border-[#1A1A1A] transition-all shadow-xs shrink-0"
               >
-                <Check className="w-3.5 h-3.5 text-[#8C271E]" />
+                <Check className="w-3.5 h-3.5 text-[#8C271E] shrink-0" />
                 <span>Deposit into Archive</span>
               </button>
             </div>

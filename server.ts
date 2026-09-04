@@ -1,28 +1,44 @@
 /**
- * Production Server for Personal Gemini Journal
+ * Production & Development Server for Personal Gemini Journal
+ * Full-Stack Architecture with Express API routing and Vite SPA integration
  */
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createServer as createViteServer } from 'vite';
 import { apiRouter } from './server/apiRouter.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const app = express();
-const PORT = 3000;
+async function startServer() {
+  const app = express();
+  const PORT = 3000;
 
-app.use(express.json());
-app.use('/api', apiRouter);
+  // Middleware
+  app.use(express.json({ limit: '10mb' }));
 
-// Serve static assets from dist
-const distPath = path.join(__dirname, 'dist');
-app.use(express.static(distPath));
+  // API routes FIRST
+  app.use('/api', apiRouter);
 
-app.get('*', (_req, res) => {
-  res.sendFile(path.join(distPath, 'index.html'));
-});
+  // Vite middleware for development / static serving for production
+  if (process.env.NODE_ENV !== 'production') {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(process.cwd(), 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (_req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  }
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Personal Gemini Journal server running securely on port ${PORT}`);
-});
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Personal Gemini Journal server running on http://localhost:${PORT}`);
+  });
+}
+
+startServer();
