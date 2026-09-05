@@ -400,7 +400,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             {/* Right: Picture Source Controls */}
             <div className="md:col-span-8 space-y-4">
               <p className="text-xs font-serif text-[#1A1A1A]/80">
-                You can upload a personal photograph, pull your profile image directly from your Google (Gmail) or Apple ID account, enter an image URL, or choose an editorial portrait.
+                You can upload a personal photograph, pull your profile image directly from your email account avatar, enter an image URL, or choose an editorial portrait.
               </p>
 
               {/* Source Option Buttons */}
@@ -411,16 +411,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   type="button"
                   onClick={handleUseProviderImage}
                   className="px-3 py-2 bg-white hover:bg-[#F2EFE9] border border-[#1A1A1A]/20 hover:border-[#1A1A1A] text-xs font-mono uppercase tracking-wider font-bold text-[#1A1A1A] inline-flex items-center gap-2 transition-all shadow-2xs cursor-pointer"
-                  title="Use the profile photo associated with your Gmail or Apple ID login"
+                  title="Use the profile photo associated with your email account"
                 >
                   <Sparkles className="w-3.5 h-3.5 text-[#8C271E]" />
-                  <span>
-                    {isGmailUser
-                      ? 'Use Gmail / Google Photo'
-                      : isAppleUser
-                      ? 'Use Apple ID Photo'
-                      : 'Use Login Provider Photo'}
-                  </span>
+                  <span>Use Account / Web Avatar</span>
                 </button>
 
                 {/* Local Upload Button */}
@@ -559,7 +553,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 <Mail className="w-3.5 h-3.5 text-[#1A1A1A]/50 shrink-0" />
                 <span className="truncate flex-1">{currentUser.email}</span>
                 <span className="px-1.5 py-0.5 bg-white border border-[#1A1A1A]/20 text-[9px] uppercase font-bold text-[#3B5A30]">
-                  {isGmailUser ? 'Gmail' : isAppleUser ? 'Apple ID' : 'Verified'}
+                  Verified
                 </span>
               </div>
               <p className="text-[10px] font-serif italic text-[#1A1A1A]/60">

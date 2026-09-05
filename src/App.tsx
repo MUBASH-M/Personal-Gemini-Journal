@@ -28,8 +28,6 @@ import {
   deleteEntryFromFirestore,
   saveUserProfileToFirestore,
   fetchFirestoreUserProfile,
-  signInWithGooglePopup,
-  signInWithApplePopup,
   signInWithEmail,
   signUpWithEmail,
   signOutFirebase,
@@ -300,69 +298,6 @@ export default function App() {
     }
   };
 
-  const handleLoginGoogle = async () => {
-    setAuthLoading(true);
-    setAuthError(null);
-    try {
-      const cred = await signInWithGooglePopup();
-      const fbUser = cred.firebaseUser;
-      const email = fbUser.email || cred.user.email;
-      const displayName = fbUser.displayName || cred.user.displayName;
-      const photoURL =
-        fbUser.photoURL ||
-        cred.user.photoURL ||
-        (email.includes('@') ? `https://unavatar.io/google/${encodeURIComponent(email)}` : undefined);
-      const uid = fbUser.uid;
-
-      try {
-        const res = await login(uid, email, displayName, 'google', photoURL);
-        setUser(res.user);
-        setStoredSession(res.token, res.user);
-      } catch (apiErr) {
-        console.warn('Backend login endpoint unavailable; proceeding with Firebase Auth session:', apiErr);
-        setUser(cred.user);
-        setStoredSession('firebase_' + uid, cred.user);
-      }
-      setMessages([]);
-      setCurrentTab('history');
-    } catch (err: any) {
-      console.error('Google Sign-in failed:', err);
-      setAuthError(formatFirebaseAuthError(err));
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  const handleLoginApple = async () => {
-    setAuthLoading(true);
-    setAuthError(null);
-    try {
-      const cred = await signInWithApplePopup();
-      const fbUser = cred.firebaseUser;
-      const email = fbUser.email || cred.user.email;
-      const displayName = fbUser.displayName || cred.user.displayName;
-      const photoURL = fbUser.photoURL || cred.user.photoURL;
-      const uid = fbUser.uid;
-
-      try {
-        const res = await login(uid, email, displayName, 'apple', photoURL);
-        setUser(res.user);
-        setStoredSession(res.token, res.user);
-      } catch (apiErr) {
-        console.warn('Backend login endpoint unavailable; proceeding with Firebase Auth session:', apiErr);
-        setUser(cred.user);
-        setStoredSession('firebase_' + uid, cred.user);
-      }
-      setMessages([]);
-      setCurrentTab('history');
-    } catch (err: any) {
-      console.error('Apple Sign-in failed:', err);
-      setAuthError(formatFirebaseAuthError(err));
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
   const handleLoginEmail = async (email: string, password?: string) => {
     setAuthLoading(true);
     setAuthError(null);
@@ -610,8 +545,6 @@ export default function App() {
         onLoginPersona={handleLoginPersona}
         onLoginEmail={handleLoginEmail}
         onRegister={handleRegister}
-        onLoginGoogle={handleLoginGoogle}
-        onLoginApple={handleLoginApple}
         isLoading={authLoading}
         error={authError}
       />

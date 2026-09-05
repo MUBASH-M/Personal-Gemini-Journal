@@ -20,8 +20,6 @@ import {
 interface AuthScreenProps {
   personas: UserProfile[];
   onLoginPersona: (uid: string) => Promise<void>;
-  onLoginGoogle: () => Promise<void>;
-  onLoginApple: () => Promise<void>;
   onLoginEmail: (email: string, password?: string) => Promise<void>;
   onRegister: (email: string, displayName: string, password?: string) => Promise<void>;
   isLoading: boolean;
@@ -31,8 +29,6 @@ interface AuthScreenProps {
 export const AuthScreen: React.FC<AuthScreenProps> = ({
   personas,
   onLoginPersona,
-  onLoginGoogle,
-  onLoginApple,
   onLoginEmail,
   onRegister,
   isLoading,
@@ -154,67 +150,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               </button>
             </div>
           )}
-
-          {/* Social / Single Sign-On Providers: Google & Apple */}
-          <div className="space-y-2.5 mb-6">
-            {/* Google / Gmail ID Button */}
-            <button
-              id="btn-login-google"
-              type="button"
-              disabled={isLoading}
-              onClick={onLoginGoogle}
-              className="w-full h-11 flex items-center justify-center gap-3 px-4 border border-[#1A1A1A]/25 bg-[#FDFBF7] hover:bg-white hover:border-[#1A1A1A] text-[#1A1A1A] text-xs font-bold font-serif tracking-wide transition-all shadow-2xs group disabled:opacity-60"
-            >
-              {/* Google G Multi-Color Icon */}
-              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                <path
-                  fill="#4285F4"
-                  d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
-                />
-                <path
-                  fill="#34A853"
-                  d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.35 24 12 24z"
-                />
-                <path
-                  fill="#FBBC05"
-                  d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.16 0 9.97 0 12s.45 3.84 1.25 5.42l4.03-3.15z"
-                />
-                <path
-                  fill="#EA4335"
-                  d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.35 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
-                />
-              </svg>
-              <span>Continue with Google (Gmail ID)</span>
-            </button>
-
-            {/* Apple ID Button */}
-            <button
-              id="btn-login-apple"
-              type="button"
-              disabled={isLoading}
-              onClick={onLoginApple}
-              className="w-full h-11 flex items-center justify-center gap-3 px-4 border border-[#1A1A1A] bg-[#1A1A1A] hover:bg-black text-white text-xs font-bold font-serif tracking-wide transition-all shadow-xs group disabled:opacity-60"
-            >
-              {/* Apple Icon */}
-              <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 170 170">
-                <path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.35.13-9.16-1.9-14.42-6.08-3.7-3.04-7.66-7.79-11.88-14.24-6.3-9.59-11.31-20.73-15.02-33.43-3.71-12.7-5.57-24.78-5.57-36.24 0-14.04 3.36-26.01 10.07-35.91 6.72-9.9 15.42-14.96 26.11-15.19 4.35 0 9.42 1.14 15.22 3.44 5.8 2.29 9.5 3.49 11.09 3.59 2.03-.13 6.01-1.39 11.96-3.8 5.94-2.41 10.95-3.5 15.02-3.26 12.16.65 21.84 4.88 29.04 12.7-10.43 6.32-15.54 15.11-15.34 26.37.2 9.79 3.99 17.84 11.37 24.16 4.7 4.13 10.08 7.02 16.14 8.68-2.61 8.28-6.09 16.71-10.45 25.32zM119.22 33.34c0-7.39 2.65-14.35 7.95-20.87 5.3-6.52 11.97-10.68 20.02-12.47.22 1.52.33 2.94.33 4.25 0 7.39-2.76 14.47-8.28 21.23-5.52 6.75-12.24 10.97-20.15 12.65-.43-1.52-.65-3.12-.65-4.79z" />
-              </svg>
-              <span>Continue with Apple ID</span>
-            </button>
-
-            <p className="text-[10px] font-serif italic text-[#1A1A1A]/60 text-center pt-0.5">
-              ✨ Automatically detects &amp; applies your Google or Apple ID portrait and verified name.
-            </p>
-          </div>
-
-          {/* Editorial Divider */}
-          <div className="relative flex py-2 items-center mb-5">
-            <div className="flex-grow border-t border-[#1A1A1A]/15"></div>
-            <span className="flex-shrink mx-3 text-[9px] uppercase tracking-[0.25em] font-bold text-[#1A1A1A]/50 bg-white px-2">
-              Or Authenticate with Any Mail ID
-            </span>
-            <div className="flex-grow border-t border-[#1A1A1A]/15"></div>
-          </div>
 
           {/* Sign In / Sign Up toggle */}
           <div className="flex border border-[#1A1A1A]/20 p-1 mb-5 bg-[#F9F8F6]">
