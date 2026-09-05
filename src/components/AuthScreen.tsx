@@ -14,6 +14,7 @@ import {
   ChevronDown,
   ChevronUp,
   AlertCircle,
+  X,
 } from 'lucide-react';
 
 interface AuthScreenProps {
@@ -42,7 +43,10 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [showPersonas, setShowPersonas] = useState(false);
+  const [dismissedError, setDismissedError] = useState<string | null>(null);
   const { isDark, toggleTheme } = useTheme();
+
+  const activeError = error && error !== dismissedError ? error : null;
 
   // Detect email domain for friendly user feedback
   const getEmailProviderBadge = (val: string) => {
@@ -130,13 +134,24 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
       <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-lg px-4">
         {/* Main Auth Container */}
         <div className="bg-white py-7 px-6 sm:px-9 border border-[#1A1A1A]/20 shadow-[0_8px_30px_rgba(26,26,26,0.04)]">
-          {error && (
-            <div className="mb-5 p-3.5 border border-rose-400 bg-[#FCF4F3] text-[#6E2B29] text-xs font-mono flex items-start gap-2.5">
-              <AlertCircle className="w-4 h-4 text-[#8C271E] shrink-0 mt-0.5" />
-              <div className="min-w-0">
-                <span className="font-bold">Authentication notice: </span>
-                <span>{error}</span>
+          {activeError && (
+            <div className="mb-5 p-3.5 border border-rose-400 bg-[#FCF4F3] text-[#6E2B29] text-xs font-mono flex items-start justify-between gap-2.5 animate-in fade-in">
+              <div className="flex items-start gap-2.5 min-w-0">
+                <AlertCircle className="w-4 h-4 text-[#8C271E] shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <span className="font-bold">Authentication notice: </span>
+                  <span className="break-words">{activeError}</span>
+                </div>
               </div>
+              <button
+                type="button"
+                onClick={() => setDismissedError(error || null)}
+                className="text-[#6E2B29]/60 hover:text-[#6E2B29] p-0.5 shrink-0 transition-colors"
+                title="Dismiss notice"
+                aria-label="Dismiss notice"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
             </div>
           )}
 

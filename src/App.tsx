@@ -7,6 +7,7 @@ import { UserProfile, ChatMessage, JournalEntry, InsightsData, JournalEdition } 
 import {
   getStoredUser,
   getStoredToken,
+  setStoredSession,
   getPersonas,
   login,
   register,
@@ -19,6 +20,9 @@ import {
   getInsights,
 } from './api';
 import {
+  auth,
+  onAuthStateChanged,
+  isFirebaseOwner,
   subscribeToEntries,
   createEntryInFirestore,
   deleteEntryFromFirestore,
@@ -29,6 +33,8 @@ import {
   signInWithEmail,
   signUpWithEmail,
   signOutFirebase,
+  ensureFirebaseAuth,
+  formatFirebaseAuthError,
 } from './firebase';
 import {
   getStoredEditions,
@@ -89,54 +95,149 @@ export default function App() {
     setActiveEditionIdState(active);
   }, [user?.uid]);
 
-  // Load initial personas & session
+  // Load initial personas & session and synchronize Firebase Auth
   useEffect(() => {
+    // 1. Listen for real-time Firebase Auth state changes
+    const unsubscribeAuth = onAuthStateChanged(auth, async (fbUser) => {
+      if (fbUser && !fbUser.isAnonymous) {
+        try {
+          const fsUser = await fetchFirestoreUserProfile(fbUser.uid);
+          let fullUser: UserProfile;
+          try {
+            const logRes = await login(
+              fbUser.uid,
+              fbUser.email || undefined,
+              fbUser.displayName || undefined,
+              fbUser.providerData?.[0]?.providerId || 'google',
+              fbUser.photoURL || undefined
+            );
+            fullUser = {
+              ...logRes.user,
+              ...(fsUser || {}),
+              uid: fbUser.uid,
+              email: fbUser.email || logRes.user.email,
+              displayName: fbUser.displayName || logRes.user.displayName,
+              photoURL: fbUser.photoURL || fsUser?.photoURL || logRes.user.photoURL,
+            };
+            setStoredSession(logRes.token, fullUser);
+          } catch (apiErr) {
+            console.warn('Backend login sync unavailable; maintaining Firebase Auth user state:', apiErr);
+            fullUser = {
+              ...(fsUser || {}),
+              uid: fbUser.uid,
+              email: fbUser.email || 'user@example.com',
+              displayName: fbUser.displayName || fbUser.email?.split('@')[0] || 'Journal Author',
+              role: 'Private Journaler',
+              authProvider: (fbUser.providerData?.[0]?.providerId as any) || 'google',
+              photoURL: fbUser.photoURL || fsUser?.photoURL,
+              createdAt: new Date().toISOString(),
+            };
+            setStoredSession('firebase_' + fbUser.uid, fullUser);
+          }
+          setUser(fullUser);
+          setCurrentTab('history');
+        } catch (authErr) {
+          console.warn('Firebase Auth state sync notice:', authErr);
+        }
+      }
+    });
+
+    // 2. Initialize application personas and session
     async function init() {
       try {
-        const pRes = await getPersonas();
-        const personaList = Array.isArray(pRes?.personas) ? pRes.personas : [];
-        setPersonas(personaList);
+        ensureFirebaseAuth().catch(() => {});
+        let personaList: UserProfile[] = [];
+        try {
+          const pRes = await getPersonas();
+          personaList = Array.isArray(pRes?.personas) ? pRes.personas : [];
+          setPersonas(personaList);
+        } catch {
+          // Personas optional if backend offline
+        }
+
+        const currentFbUser = auth.currentUser;
+        if (currentFbUser && !currentFbUser.isAnonymous) {
+          // Firebase authenticated user takes absolute precedence
+          const fsUser = await fetchFirestoreUserProfile(currentFbUser.uid);
+          let fullUser: UserProfile;
+          try {
+            const logRes = await login(
+              currentFbUser.uid,
+              currentFbUser.email || undefined,
+              currentFbUser.displayName || undefined,
+              currentFbUser.providerData?.[0]?.providerId || 'google',
+              currentFbUser.photoURL || undefined
+            );
+            fullUser = {
+              ...logRes.user,
+              ...(fsUser || {}),
+              uid: currentFbUser.uid,
+            };
+            setStoredSession(logRes.token, fullUser);
+          } catch {
+            fullUser = {
+              ...(fsUser || {}),
+              uid: currentFbUser.uid,
+              email: currentFbUser.email || 'user@example.com',
+              displayName: currentFbUser.displayName || 'Journal Author',
+              role: 'Private Journaler',
+              authProvider: 'google',
+              createdAt: new Date().toISOString(),
+            };
+            setStoredSession('firebase_' + currentFbUser.uid, fullUser);
+          }
+          setUser(fullUser);
+          setCurrentTab('history');
+          return;
+        }
 
         const storedUser = getStoredUser();
         const storedToken = getStoredToken();
         if (storedUser && storedToken) {
           setUser(storedUser);
-          // Check if Firestore has more complete profile details (e.g. custom photo, bio)
           fetchFirestoreUserProfile(storedUser.uid).then((fsUser) => {
             if (fsUser) {
               setUser((prev) => (prev ? { ...prev, ...fsUser } : fsUser));
             }
           }).catch(() => {});
-          // Returning users land on history (from UX doc 2.2)
           setCurrentTab('history');
         } else if (personaList.length > 0) {
-          // Auto-select persona 1 (Reflective Rae) for frictionless judging demo
+          // Auto-select persona 1 (Reflective Rae) only when completely unauthenticated
           const initial = personaList[0];
-          const logRes = await login(initial.uid);
-          setUser(logRes.user);
-          setCurrentTab('history');
+          try {
+            const logRes = await login(initial.uid);
+            setUser(logRes.user);
+            setCurrentTab('history');
+          } catch {
+            // Backend offline
+          }
         }
       } catch (err) {
         console.error('Initialization error:', err);
       }
     }
+
     init();
+
+    return () => {
+      unsubscribeAuth();
+    };
   }, []);
 
   // Fetch entries and insights whenever user changes or tab changes
   useEffect(() => {
     if (!user) return;
 
-    // Save profile to Firestore
-    saveUserProfileToFirestore(user).catch(() => {});
+    // Save profile to Firestore only if user is the authenticated Firebase owner
+    if (isFirebaseOwner(user.uid)) {
+      saveUserProfileToFirestore(user).catch(() => {});
+    }
 
-    // Subscribe to real-time Firestore entries
+    // Subscribe to real-time Firestore entries (returns dummy unsub if not Firebase owner)
     const unsubscribe = subscribeToEntries(
       user.uid,
       (firestoreEntries) => {
-        if (firestoreEntries && firestoreEntries.length > 0) {
-          setEntries(firestoreEntries);
-        }
+        setEntries(firestoreEntries || []);
       },
       (err) => {
         console.warn('Firestore subscription notice (using server sync):', err);
@@ -160,9 +261,11 @@ export default function App() {
     setIsLoadingEntries(true);
     try {
       const res = await getEntries();
-      setEntries(res.entries || []);
+      if (Array.isArray(res?.entries)) {
+        setEntries(res.entries);
+      }
     } catch (err) {
-      console.error('Failed to load entries:', err);
+      console.warn('Server entries sync notice (using Firestore active subscription):', err);
     } finally {
       setIsLoadingEntries(false);
     }
@@ -201,26 +304,30 @@ export default function App() {
     setAuthLoading(true);
     setAuthError(null);
     try {
-      let email = 'reader.google@gmail.com';
-      let displayName = 'Google Scholar';
-      let photoURL: string | undefined;
+      const cred = await signInWithGooglePopup();
+      const fbUser = cred.firebaseUser;
+      const email = fbUser.email || cred.user.email;
+      const displayName = fbUser.displayName || cred.user.displayName;
+      const photoURL =
+        fbUser.photoURL ||
+        cred.user.photoURL ||
+        (email.includes('@') ? `https://unavatar.io/google/${encodeURIComponent(email)}` : undefined);
+      const uid = fbUser.uid;
+
       try {
-        const cred = await signInWithGooglePopup();
-        if (cred?.user?.email) email = cred.user.email;
-        if (cred?.user?.displayName) displayName = cred.user.displayName;
-        if (cred?.user?.photoURL) photoURL = cred.user.photoURL;
-      } catch (fbErr: any) {
-        console.warn('Direct Google popup fell back to standard Google credential token:', fbErr);
+        const res = await login(uid, email, displayName, 'google', photoURL);
+        setUser(res.user);
+        setStoredSession(res.token, res.user);
+      } catch (apiErr) {
+        console.warn('Backend login endpoint unavailable; proceeding with Firebase Auth session:', apiErr);
+        setUser(cred.user);
+        setStoredSession('firebase_' + uid, cred.user);
       }
-      if (!photoURL && email.includes('@')) {
-        photoURL = `https://unavatar.io/google/${encodeURIComponent(email)}`;
-      }
-      const res = await login(undefined, email, displayName, 'google', photoURL);
-      setUser(res.user);
       setMessages([]);
       setCurrentTab('history');
     } catch (err: any) {
-      setAuthError(err.message || 'Google authentication failed');
+      console.error('Google Sign-in failed:', err);
+      setAuthError(formatFirebaseAuthError(err));
     } finally {
       setAuthLoading(false);
     }
@@ -230,26 +337,27 @@ export default function App() {
     setAuthLoading(true);
     setAuthError(null);
     try {
-      let email = 'curator.apple@icloud.com';
-      let displayName = 'Apple Editorialist';
-      let photoURL: string | undefined;
+      const cred = await signInWithApplePopup();
+      const fbUser = cred.firebaseUser;
+      const email = fbUser.email || cred.user.email;
+      const displayName = fbUser.displayName || cred.user.displayName;
+      const photoURL = fbUser.photoURL || cred.user.photoURL;
+      const uid = fbUser.uid;
+
       try {
-        const cred = await signInWithApplePopup();
-        if (cred?.user?.email) email = cred.user.email;
-        if (cred?.user?.displayName) displayName = cred.user.displayName;
-        if (cred?.user?.photoURL) photoURL = cred.user.photoURL;
-      } catch (fbErr: any) {
-        console.warn('Direct Apple popup fell back to standard Apple credential token:', fbErr);
+        const res = await login(uid, email, displayName, 'apple', photoURL);
+        setUser(res.user);
+        setStoredSession(res.token, res.user);
+      } catch (apiErr) {
+        console.warn('Backend login endpoint unavailable; proceeding with Firebase Auth session:', apiErr);
+        setUser(cred.user);
+        setStoredSession('firebase_' + uid, cred.user);
       }
-      if (!photoURL && email.includes('@')) {
-        photoURL = `https://unavatar.io/apple/${encodeURIComponent(email.split('@')[0])}`;
-      }
-      const res = await login(undefined, email, displayName, 'apple', photoURL);
-      setUser(res.user);
       setMessages([]);
       setCurrentTab('history');
     } catch (err: any) {
-      setAuthError(err.message || 'Apple authentication failed');
+      console.error('Apple Sign-in failed:', err);
+      setAuthError(formatFirebaseAuthError(err));
     } finally {
       setAuthLoading(false);
     }
@@ -260,23 +368,33 @@ export default function App() {
     setAuthError(null);
     try {
       let photoURL: string | undefined;
+      let uid: string | undefined;
+      let fbProfile: UserProfile | undefined;
       if (password) {
-        try {
-          const userCred = await signInWithEmail(email, password);
-          if (userCred?.user?.photoURL) photoURL = userCred.user.photoURL;
-        } catch (fbErr) {
-          console.warn('Firebase email auth fallback to backend auth:', fbErr);
-        }
+        const userCred = await signInWithEmail(email, password);
+        fbProfile = userCred.user;
+        if (userCred?.user?.photoURL) photoURL = userCred.user.photoURL;
+        if (userCred?.firebaseUser?.uid) uid = userCred.firebaseUser.uid;
       }
       if (!photoURL && email.toLowerCase().includes('@gmail.com')) {
         photoURL = `https://unavatar.io/google/${encodeURIComponent(email)}`;
       }
-      const res = await login(undefined, email, email.split('@')[0], 'email', photoURL);
-      setUser(res.user);
+      try {
+        const res = await login(uid, email, email.split('@')[0], 'email', photoURL);
+        setUser(res.user);
+        setStoredSession(res.token, res.user);
+      } catch (apiErr) {
+        if (fbProfile) {
+          setUser(fbProfile);
+          setStoredSession('firebase_' + fbProfile.uid, fbProfile);
+        } else {
+          throw apiErr;
+        }
+      }
       setMessages([]);
       setCurrentTab('history');
     } catch (err: any) {
-      setAuthError(err.message || 'Login failed');
+      setAuthError(formatFirebaseAuthError(err));
     } finally {
       setAuthLoading(false);
     }
@@ -287,23 +405,33 @@ export default function App() {
     setAuthError(null);
     try {
       let photoURL: string | undefined;
+      let uid: string | undefined;
+      let fbProfile: UserProfile | undefined;
       if (password) {
-        try {
-          const userCred = await signUpWithEmail(email, password, displayName);
-          if (userCred?.user?.photoURL) photoURL = userCred.user.photoURL;
-        } catch (fbErr) {
-          console.warn('Firebase email signup fallback to backend registration:', fbErr);
-        }
+        const userCred = await signUpWithEmail(email, password, displayName);
+        fbProfile = userCred.user;
+        if (userCred?.user?.photoURL) photoURL = userCred.user.photoURL;
+        if (userCred?.firebaseUser?.uid) uid = userCred.firebaseUser.uid;
       }
       if (!photoURL && email.toLowerCase().includes('@gmail.com')) {
         photoURL = `https://unavatar.io/google/${encodeURIComponent(email)}`;
       }
-      const res = await register(email, displayName, photoURL);
-      setUser(res.user);
+      try {
+        const res = await register(email, displayName, photoURL, uid);
+        setUser(res.user);
+        setStoredSession(res.token, res.user);
+      } catch (apiErr) {
+        if (fbProfile) {
+          setUser(fbProfile);
+          setStoredSession('firebase_' + fbProfile.uid, fbProfile);
+        } else {
+          throw apiErr;
+        }
+      }
       setMessages([]);
       setCurrentTab('session');
     } catch (err: any) {
-      setAuthError(err.message || 'Registration failed');
+      setAuthError(formatFirebaseAuthError(err));
     } finally {
       setAuthLoading(false);
     }
@@ -422,22 +550,24 @@ export default function App() {
     setMessages([]);
 
     if (user && summaryData) {
-      try {
-        const targetEdId = targetEditionId || activeEditionId;
-        const targetEd = editions.find((e) => e.id === targetEdId);
-        await createEntryInFirestore(user.uid, {
-          summary: customNotes || summaryData.summary,
-          mood: summaryData.mood,
-          themes: summaryData.themes,
-          keyTakeaway: summaryData.keyTakeaway,
-          turnCount: messages.filter((m) => m.role === 'user').length,
-          messages: messages,
-          editionId: targetEdId,
-          editionTitle: targetEd?.title,
-          editionIssue: targetEd?.issueNumber,
-        });
-      } catch (firestoreErr) {
-        console.warn('Firestore persistence notification:', firestoreErr);
+      if (isFirebaseOwner(user.uid)) {
+        try {
+          const targetEdId = targetEditionId || activeEditionId;
+          const targetEd = editions.find((e) => e.id === targetEdId);
+          await createEntryInFirestore(user.uid, {
+            summary: customNotes || summaryData.summary,
+            mood: summaryData.mood,
+            themes: summaryData.themes,
+            keyTakeaway: summaryData.keyTakeaway,
+            turnCount: messages.filter((m) => m.role === 'user').length,
+            messages: messages,
+            editionId: targetEdId,
+            editionTitle: targetEd?.title,
+            editionIssue: targetEd?.issueNumber,
+          });
+        } catch (firestoreErr) {
+          console.warn('Firestore persistence notification:', firestoreErr);
+        }
       }
     }
 
@@ -449,7 +579,7 @@ export default function App() {
   // Delete single entry
   const handleDeleteEntry = async (entryId: string) => {
     try {
-      if (user) {
+      if (user && isFirebaseOwner(user.uid)) {
         await deleteEntryFromFirestore(user.uid, entryId).catch((err) => {
           console.warn('Firestore delete notice:', err);
         });

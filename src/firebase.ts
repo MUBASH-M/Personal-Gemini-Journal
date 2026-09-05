@@ -24,6 +24,7 @@ import {
   orderBy,
   onSnapshot,
   FirestoreError,
+  getDocFromServer,
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 import { JournalEntry, UserProfile } from './types';
@@ -35,17 +36,116 @@ const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
 
-export { firebaseConfig };
+export { firebaseConfig, onAuthStateChanged };
+
+// Test connection on boot per Firebase skill guidelines
+async function testConnection() {
+  try {
+    await getDocFromServer(doc(db, 'test', 'connection'));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.error('Please check your Firebase configuration.');
+    }
+  }
+}
+testConnection();
+
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  };
+}
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo:
+        auth.currentUser?.providerData?.map((provider) => ({
+          providerId: provider.providerId,
+          email: provider.email,
+        })) || [],
+    },
+    operationType,
+    path,
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
+export function isFirebaseOwner(userId?: string): boolean {
+  if (!userId) return false;
+  return Boolean(
+    auth.currentUser &&
+    !auth.currentUser.isAnonymous &&
+    auth.currentUser.uid === userId
+  );
+}
 
 /**
- * Ensure user is authenticated in Firebase Auth (anonymous fallback)
+ * Ensure user is authenticated in Firebase Auth (checks active user)
  */
-export async function ensureFirebaseAuth(): Promise<FirebaseUser> {
-  if (auth.currentUser) {
-    return auth.currentUser;
+export async function ensureFirebaseAuth(): Promise<FirebaseUser | null> {
+  return auth.currentUser;
+}
+
+/**
+ * Formats Firebase Auth error codes into human-actionable messages,
+ * specifically handling Netlify and external domain authorization.
+ */
+export function formatFirebaseAuthError(err: any): string {
+  const code = err?.code || '';
+  const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'this domain';
+
+  switch (code) {
+    case 'auth/unauthorized-domain':
+      return `Domain not authorized in Firebase Console: '${currentHost}' must be added to your Firebase project. Go to Firebase Console > Authentication > Settings > Authorized Domains and add '${currentHost}'.`;
+    case 'auth/popup-blocked':
+      return 'The sign-in popup was blocked by your browser. Please allow popups for this site and try again.';
+    case 'auth/popup-closed-by-user':
+      return 'The Google sign-in window was closed before completing authentication.';
+    case 'auth/cancelled-popup-request':
+      return 'The sign-in popup request was cancelled.';
+    case 'auth/operation-not-allowed':
+      return 'Google sign-in is not enabled in your Firebase project. Enable Google in Firebase Console > Authentication > Sign-in method.';
+    case 'auth/user-disabled':
+      return 'This account has been disabled in Firebase Authentication.';
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found':
+      return 'Invalid email or password. Please verify your credentials.';
+    case 'auth/email-already-in-use':
+      return 'An account with this email address already exists. Please sign in instead.';
+    case 'auth/network-request-failed':
+      return 'Network connection error while contacting Firebase Authentication. Please check your internet connection.';
+    default:
+      return err?.message || 'Authentication failed. Please try again.';
   }
-  const credential = await signInAnonymously(auth);
-  return credential.user;
 }
 
 /**
@@ -164,18 +264,24 @@ export async function signOutFirebase(): Promise<void> {
  * Save user profile to /users/{userId} and sync Firebase Auth
  */
 export async function saveUserProfileToFirestore(profile: UserProfile): Promise<void> {
+  if (!isFirebaseOwner(profile.uid)) {
+    return;
+  }
   try {
-    const userDocRef = doc(db, 'users', profile.uid);
+    const targetUid = profile.uid;
+    const userDocRef = doc(db, 'users', targetUid);
     const payload: Record<string, any> = {
-      uid: profile.uid,
-      email: profile.email,
-      displayName: profile.displayName,
+      uid: targetUid,
+      email: profile.email || auth.currentUser?.email || 'user@example.com',
+      displayName: profile.displayName || auth.currentUser?.displayName || 'Journal Author',
       role: profile.role || 'Private Journaler',
       createdAt: profile.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
-    if (profile.photoURL !== undefined) payload.photoURL = profile.photoURL || null;
+    if (profile.photoURL !== undefined || auth.currentUser?.photoURL) {
+      payload.photoURL = profile.photoURL || auth.currentUser?.photoURL || null;
+    }
     if (profile.bio !== undefined) payload.bio = profile.bio || null;
     if (profile.pronouns !== undefined) payload.pronouns = profile.pronouns || null;
     if (profile.recoveryContact !== undefined) payload.recoveryContact = profile.recoveryContact || null;
@@ -184,17 +290,21 @@ export async function saveUserProfileToFirestore(profile: UserProfile): Promise<
     if (profile.authProvider !== undefined) payload.authProvider = profile.authProvider;
     if (profile.activeEditionId !== undefined) payload.activeEditionId = profile.activeEditionId;
 
-    await setDoc(userDocRef, payload, { merge: true });
+    try {
+      await setDoc(userDocRef, payload, { merge: true });
+    } catch (err: any) {
+      handleFirestoreError(err, OperationType.WRITE, `users/${targetUid}`);
+    }
 
     // Sync with client-side Firebase Auth profile if matching
-    if (auth.currentUser && auth.currentUser.uid === profile.uid) {
+    if (auth.currentUser && auth.currentUser.uid === targetUid) {
       await updateProfile(auth.currentUser, {
-        displayName: profile.displayName,
-        photoURL: profile.photoURL || null,
+        displayName: payload.displayName,
+        photoURL: payload.photoURL || null,
       }).catch((e) => console.warn('Firebase Auth updateProfile sync notice:', e));
     }
   } catch (err) {
-    console.warn('Firestore user profile save error (fallback to local):', err);
+    console.warn('Firestore user profile save notice:', err);
   }
 }
 
@@ -202,14 +312,18 @@ export async function saveUserProfileToFirestore(profile: UserProfile): Promise<
  * Fetch profile directly from Firestore /users/{userId}
  */
 export async function fetchFirestoreUserProfile(userId: string): Promise<UserProfile | null> {
+  if (!isFirebaseOwner(userId)) {
+    return null;
+  }
   try {
     const userDocRef = doc(db, 'users', userId);
     const snap = await getDoc(userDocRef);
     if (snap.exists()) {
       return snap.data() as UserProfile;
     }
-  } catch (err) {
+  } catch (err: any) {
     console.warn('Failed to fetch Firestore user profile:', err);
+    handleFirestoreError(err, OperationType.GET, `users/${userId}`);
   }
   return null;
 }
@@ -262,8 +376,11 @@ export function getProviderLoginPhotoURL(user?: UserProfile | null): string | nu
 export function subscribeToEntries(
   userId: string,
   onNext: (entries: JournalEntry[]) => void,
-  onError?: (error: FirestoreError) => void
-) {
+  onError?: (error: any) => void
+): () => void {
+  if (!isFirebaseOwner(userId)) {
+    return () => {};
+  }
   const entriesColRef = collection(db, 'users', userId, 'entries');
   const q = query(entriesColRef, orderBy('createdAt', 'desc'));
 
@@ -288,7 +405,8 @@ export function subscribeToEntries(
       onNext(entries);
     },
     (err) => {
-      console.warn('Firestore subscription error:', err);
+      console.warn('Firestore subscription notice:', err);
+      handleFirestoreError(err, OperationType.GET, `users/${userId}/entries`);
       if (onError) onError(err);
     }
   );
@@ -300,7 +418,10 @@ export function subscribeToEntries(
 export async function createEntryInFirestore(
   userId: string,
   entry: Omit<JournalEntry, 'entryId' | 'uid' | 'createdAt'> & { entryId?: string }
-): Promise<JournalEntry> {
+): Promise<JournalEntry | null> {
+  if (!isFirebaseOwner(userId)) {
+    return null;
+  }
   const entryId = entry.entryId || 'ent_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
   const now = new Date().toISOString();
 
@@ -311,19 +432,31 @@ export async function createEntryInFirestore(
     createdAt: now,
   };
 
-  const entryDocRef = doc(db, 'users', userId, 'entries', entryId);
-  await setDoc(entryDocRef, fullEntry);
-
-  return fullEntry;
+  try {
+    const entryDocRef = doc(db, 'users', userId, 'entries', entryId);
+    await setDoc(entryDocRef, fullEntry);
+    return fullEntry;
+  } catch (err: any) {
+    handleFirestoreError(err, OperationType.WRITE, `users/${userId}/entries/${entryId}`);
+    throw err;
+  }
 }
 
 /**
  * Delete a journal entry from /users/{userId}/entries/{entryId}
  */
 export async function deleteEntryFromFirestore(userId: string, entryId: string): Promise<boolean> {
-  const entryDocRef = doc(db, 'users', userId, 'entries', entryId);
-  await deleteDoc(entryDocRef);
-  return true;
+  if (!isFirebaseOwner(userId)) {
+    return false;
+  }
+  try {
+    const entryDocRef = doc(db, 'users', userId, 'entries', entryId);
+    await deleteDoc(entryDocRef);
+    return true;
+  } catch (err: any) {
+    handleFirestoreError(err, OperationType.DELETE, `users/${userId}/entries/${entryId}`);
+    throw err;
+  }
 }
 
 /**

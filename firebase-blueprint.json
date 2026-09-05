@@ -2,37 +2,62 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "entities": {
     "UserProfile": {
-      "path": "/users/{userId}",
-      "description": "User profile and settings",
-      "fields": {
-        "uid": { "type": "string", "description": "User unique identifier" },
+      "title": "UserProfile",
+      "description": "User profile with display metadata, editorial roles, and personal preferences",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Unique user identifier" },
         "email": { "type": "string", "description": "User email address" },
         "displayName": { "type": "string", "description": "User display name" },
-        "role": { "type": "string", "description": "User role or designation" },
-        "photoURL": { "type": "string", "description": "User profile picture URL or data URI", "optional": true },
-        "bio": { "type": "string", "description": "Personal reflection biography or intention statement", "optional": true },
-        "pronouns": { "type": "string", "description": "Preferred pronouns", "optional": true },
-        "recoveryContact": { "type": "string", "description": "Trusted crisis or accountability contact", "optional": true },
-        "sobrietyDate": { "type": "string", "description": "Milestone or recovery anniversary date", "optional": true },
-        "authProvider": { "type": "string", "description": "Authentication provider method", "optional": true },
+        "role": { "type": "string", "description": "User editorial role" },
+        "photoURL": { "type": "string", "description": "Profile picture URL or avatar service URL" },
+        "bio": { "type": "string", "description": "User biography or reflection intention" },
+        "pronouns": { "type": "string", "description": "Preferred pronouns" },
+        "recoveryContact": { "type": "string", "description": "Trusted accountability or crisis contact" },
+        "sobrietyDate": { "type": "string", "description": "Milestone or journey date" },
+        "intention": { "type": "string", "description": "Active reflection intention" },
+        "authProvider": { "type": "string", "description": "Authentication provider method" },
+        "activeEditionId": { "type": "string", "description": "Preferred active folio edition ID" },
         "createdAt": { "type": "string", "description": "ISO timestamp of account creation" },
-        "updatedAt": { "type": "string", "description": "ISO timestamp of last profile update", "optional": true }
-      }
+        "updatedAt": { "type": "string", "description": "ISO timestamp of last update" }
+      },
+      "required": ["uid", "email", "displayName"]
     },
     "JournalEntry": {
-      "path": "/users/{userId}/entries/{entryId}",
-      "description": "Individual confidential journal reflection and summary",
-      "fields": {
-        "entryId": { "type": "string", "description": "Unique entry identifier" },
-        "uid": { "type": "string", "description": "Owner user ID matching userId" },
+      "title": "JournalEntry",
+      "description": "Private individual reflective journal entry stored in Firestore",
+      "type": "object",
+      "properties": {
+        "entryId": { "type": "string", "description": "Unique identifier of the entry" },
+        "uid": { "type": "string", "description": "Owner user ID" },
         "summary": { "type": "string", "description": "Synthesized reflection summary" },
         "mood": { "type": "string", "description": "Primary emotional tone" },
-        "themes": { "type": "array", "description": "Array of topical themes" },
-        "keyTakeaway": { "type": "string", "description": "Actionable insight or realization", "optional": true },
-        "createdAt": { "type": "string", "description": "ISO timestamp of entry creation" },
-        "turnCount": { "type": "number", "description": "Count of interactive turns" },
-        "messages": { "type": "array", "description": "Transcript of conversational dialogue", "optional": true }
-      }
+        "themes": { "type": "array", "description": "List of topical themes" },
+        "keyTakeaway": { "type": "string", "description": "Actionable insight or realization" },
+        "createdAt": { "type": "string", "description": "ISO timestamp of creation" },
+        "turnCount": { "type": "number", "description": "Number of conversation turns" },
+        "editionId": { "type": "string", "description": "Folio volume identifier" },
+        "editionTitle": { "type": "string", "description": "Folio volume title" },
+        "hash": { "type": "string", "description": "SHA-256 cryptographic chain digest" },
+        "previousHash": { "type": "string", "description": "Previous block SHA-256 digest" },
+        "sequenceIndex": { "type": "number", "description": "Ledger sequence position" },
+        "memoryConsent": { "type": "boolean", "description": "Consent to include entry in AI memory" },
+        "isTimeCapsule": { "type": "boolean", "description": "Whether entry is a time-locked capsule" },
+        "unlockDate": { "type": "string", "description": "ISO timestamp of unlock availability" },
+        "encryptedPayload": { "type": "string", "description": "AES-GCM encrypted ciphertext" },
+        "timeCapsuleIv": { "type": "string", "description": "Initialization vector for decryption" }
+      },
+      "required": ["entryId", "uid", "summary", "mood", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User profile documents strictly isolated by user ID"
+    },
+    "/users/{userId}/entries/{entryId}": {
+      "schema": { "$ref": "#/entities/JournalEntry" },
+      "description": "User's private reflective journal entries and cryptographic blocks"
     }
   }
 }

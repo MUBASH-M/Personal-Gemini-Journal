@@ -398,14 +398,34 @@ export function getUserProfile(uid: string): UserProfile | undefined {
   return usersDatabase.get(uid);
 }
 
-export function registerUser(email: string, displayName: string): UserProfile {
+export function registerUser(email: string, displayName: string, customUid?: string): UserProfile {
+  // If customUid is specified and exists, update and return
+  if (customUid && usersDatabase.has(customUid)) {
+    const existing = usersDatabase.get(customUid)!;
+    if (displayName) existing.displayName = displayName;
+    if (email) existing.email = email;
+    return existing;
+  }
+
   for (const user of usersDatabase.values()) {
     if (user.email.toLowerCase() === email.toLowerCase()) {
+      if (customUid && user.uid !== customUid) {
+        // Migrate records to the authenticated Firebase UID
+        usersDatabase.delete(user.uid);
+        const entries = userDatabase.get(user.uid) || new Map<string, JournalEntry>();
+        const backups = pristineBackups.get(user.uid) || new Map<string, JournalEntry>();
+        userDatabase.delete(user.uid);
+        pristineBackups.delete(user.uid);
+        user.uid = customUid;
+        usersDatabase.set(customUid, user);
+        userDatabase.set(customUid, entries);
+        pristineBackups.set(customUid, backups);
+      }
       return user;
     }
   }
 
-  const uid = 'usr_' + Math.random().toString(36).substring(2, 10);
+  const uid = customUid || ('usr_' + Math.random().toString(36).substring(2, 10));
   const profile: UserProfile = {
     uid,
     email,

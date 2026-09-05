@@ -21,6 +21,11 @@ async function startServer() {
   // API routes FIRST
   app.use('/api', apiRouter);
 
+  // Catch unhandled /api requests and return JSON 404 instead of HTML fallback
+  app.use('/api', (_req, res) => {
+    res.status(404).json({ error: 'API endpoint not found' });
+  });
+
   // Vite middleware for development / static serving for production
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

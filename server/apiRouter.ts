@@ -126,12 +126,15 @@ apiRouter.post('/auth/login', (req: Request, res: Response) => {
   if (!profile && email) {
     const all = getAllUsers();
     profile = all.find((u) => u.email.toLowerCase() === email.toLowerCase());
+    if (profile && uid && profile.uid !== uid) {
+      profile = registerUser(profile.email, displayName || profile.displayName, uid);
+    }
   }
 
   if (!profile) {
-    // If not found, auto-create a user profile for smooth testing
+    // If not found, auto-create a user profile for smooth testing using the authentic UID
     const nameToUse = displayName || (email ? email.split('@')[0] : 'Guest Member');
-    profile = registerUser(email || 'guest@example.com', nameToUse);
+    profile = registerUser(email || 'guest@example.com', nameToUse, uid);
   }
 
   if (authProvider) {
@@ -153,12 +156,12 @@ apiRouter.post('/auth/login', (req: Request, res: Response) => {
 
 // Sign Up / Register
 apiRouter.post('/auth/register', (req: Request, res: Response) => {
-  const { email, displayName, photoURL } = req.body;
+  const { uid, email, displayName, photoURL } = req.body;
   if (!email || !email.includes('@')) {
     return res.status(400).json({ error: 'A valid email is required' });
   }
 
-  const profile = registerUser(email, displayName);
+  const profile = registerUser(email, displayName, uid);
   if (photoURL) {
     profile.photoURL = photoURL;
   }

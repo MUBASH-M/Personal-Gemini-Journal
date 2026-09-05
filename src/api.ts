@@ -48,7 +48,7 @@ export function clearStoredSession() {
   localStorage.removeItem(USER_KEY);
 }
 
-async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+async function request<T>(endpoint: string, options: RequestInit = {}, retries = 2): Promise<T> {
   const token = getStoredToken();
   const headers = new Headers(options.headers || {});
   headers.set('Content-Type', 'application/json');
@@ -56,16 +56,33 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(endpoint, {
-    ...options,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      ...options,
+      headers,
+    });
+  } catch (netErr: any) {
+    if (retries > 0) {
+      await new Promise((res) => setTimeout(res, 500));
+      return request<T>(endpoint, options, retries - 1);
+    }
+    throw new Error(`Connection error: ${netErr?.message || 'Server unreachable'}. Please try again.`);
+  }
 
   const contentType = response.headers.get('content-type') || '';
   if (!contentType.includes('application/json')) {
-    const text = await response.text().catch(() => '');
+    // If the server was restarting or returned an HTML fallback, retry briefly
+    if (retries > 0 && (response.status === 404 || response.status === 502 || response.status === 503)) {
+      await new Promise((res) => setTimeout(res, 700));
+      return request<T>(endpoint, options, retries - 1);
+    }
+
+    if (response.status === 404) {
+      throw new Error(`API endpoint not found (404). Server may be initializing; please retry.`);
+    }
     throw new Error(
-      `Invalid server response format (${contentType || 'empty'}). Expected application/json. Status: ${response.status}`
+      `Server returned status ${response.status} (${contentType || 'non-JSON'}). Please refresh or retry.`
     );
   }
 
@@ -109,11 +126,12 @@ export async function login(
 export async function register(
   email: string,
   displayName: string,
-  photoURL?: string
+  photoURL?: string,
+  uid?: string
 ): Promise<{ token: string; user: UserProfile }> {
   const res = await request<{ token: string; user: UserProfile }>('/api/auth/register', {
     method: 'POST',
-    body: JSON.stringify({ email, displayName, photoURL }),
+    body: JSON.stringify({ uid, email, displayName, photoURL }),
   });
   setStoredSession(res.token, res.user);
   return res;
