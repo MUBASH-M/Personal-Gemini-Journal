@@ -50,6 +50,11 @@ import {
 
 export const apiRouter = Router();
 
+// Health Check
+apiRouter.get('/health', (_req: Request, res: Response) => {
+  res.json({ status: 'ok', service: 'personal-gemini-journal-api' });
+});
+
 // Middleware: Authenticate Firebase-style ID Token / Session Token
 export interface AuthenticatedRequest extends Request {
   user?: {
